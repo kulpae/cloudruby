@@ -9,23 +9,26 @@ Install mpg123, ruby 1.9 and ncurses with a package manager of your
 destribution.
 
 Then install the required gems.
-If you are using rvm:
+
+If you are using RVM:
 <pre>
   gem install rbcurse --pre
   gem install ncurses
 </pre>
 
-otherwise:
+Without RVM you need to obtain write permissions with sudo:
 <pre>
   sudo gem install rbcurse --pre
   sudo gem install ncurses
 </pre>
 
 If it fails installing `ncurses`, then this step is also required:
+(If using RVM, ignore `sudo`)
 <pre>
   wget http://github.com/downloads/rkumar/rbcurse/ncurses-1.2.4.gem
   sudo gem install --local ncurses-1.2.4.gem
 </pre>
+
 ## Usage
 From the terminal start with:
 <pre>
