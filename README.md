@@ -10,17 +10,22 @@ destribution.
 
 Then install the required gems.
 If you are using rvm:
-``` gem install rbcurse --pre
-    gem install ncurses```
+<pre>
+  gem install rbcurse --pre
+  gem install ncurses
+</pre>
 
 otherwise:
-``` sudo gem install rbcurse --pre
-    sudo gem install ncurses```
+<pre>
+  sudo gem install rbcurse --pre
+  sudo gem install ncurses
+</pre>
 
 If it fails installing `ncurses`, then this step is also required:
-``` wget http://github.com/downloads/rkumar/rbcurse/ncurses-1.2.4.gem
-    sudo gem install --local ncurses-1.2.4.gem ```
-
+<pre>
+  wget http://github.com/downloads/rkumar/rbcurse/ncurses-1.2.4.gem
+  sudo gem install --local ncurses-1.2.4.gem
+</pre>
 ## Usage
 From the terminal start with:
 <pre>
