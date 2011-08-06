@@ -7,8 +7,8 @@ for playback.
 ## Usage
 From the terminal start with:
 <pre>
-  cloudruby          # query the latest 500 tracks from soundcloud 
-  cloudruby $search  # query the latest 500 tracks that match the $search keyword
+  cloudruby          # query the latest 100 tracks from soundcloud 
+  cloudruby $search  # query the latest 100 tracks that match the $search keyword
 </pre>
 
 Inside of NCurses:

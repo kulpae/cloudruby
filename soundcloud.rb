@@ -2,7 +2,7 @@ require 'open-uri'
 require 'json'
 
 class SoundCloud
-  LIMIT = 500
+  LIMIT = 100
 
   def initialize(client_id)
     @cid = client_id

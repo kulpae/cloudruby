@@ -1,8 +1,6 @@
 require 'ncurses'
 require 'rbcurse'
-require 'rbcurse/app'
 require 'rbcurse/rprogress'
-require 'rbcurse/mapper'
 require 'logger'
 
 class NCursesUI
@@ -30,7 +28,7 @@ class NCursesUI
       @progress.move 3,0
       while(@state != :close)
         ch = keycode_tos @win.getch
-        @win.printstring 4,0, "%-#{Ncurses.COLS-1}s" % ["Pressed #{ch}"], ColorMap.get_color(:cyan)
+        #@win.printstring 4,0, "%-#{Ncurses.COLS-1}s" % ["Pressed #{ch}"], ColorMap.get_color(:cyan)
         case ch
         when "-1"
         when /n|N/
