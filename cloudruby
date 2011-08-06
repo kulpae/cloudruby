@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+require 'pp'
+require 'cgi'
+require 'open3'
+require 'observer'
+require_relative 'soundcloud.rb'
+require_relative 'mpg123player.rb'
+require_relative 'ncurses_ui.rb'
+
+class Cloudruby
+  def init(q)
+    @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
+    @player = MPG123Player.new
+    @ui = NCursesUI.new self
+    @player.add_observer @ui
+    @player.add_observer self
+
+    @cloud.load_playlist q
+    nextTrack
+
+    trap("INT") do
+      self.quit
+    end
+  end
+
+  def nextTrack
+    track = @cloud.nextTrack
+    unless track
+      puts "Nothing found"
+      quit
+    else
+      @player.play track
+    end
+  end
+
+  def volumeUp
+    @player.volume = 5
+  end
+
+  def volumeDown
+    @player.volume = -5
+  end
+  
+  def toggleMute
+    @player.mute
+  end
+
+  def run
+    @ui.run
+  end
+
+  def update(arg)
+    state = arg[:state]
+    case state
+    when :stop
+      nextTrack
+    end
+  end
+
+  def quit
+    @ui.close
+    @player.close
+    exit
+  end
+end
+if $0 == __FILE__
+  c = Cloudruby.new
+  c.init ARGV[0]
+  c.run
+end
+
