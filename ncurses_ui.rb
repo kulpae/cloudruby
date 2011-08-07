@@ -28,7 +28,7 @@ class NCursesUI
       @p = NProgress.new @stdscr, 0, 0, :cyan, :blue, Ncurses.COLS-1
       while(@state != :close)
         ch = Ncurses.getch
-        Nutils.print stdscr, 5, 0, "Test %s" % [ch], :red
+        #Nutils.print stdscr, 5, 0, "Test %s" % [ch], :red
         case ch
         when 110, 78
           @cloud.nextTrack
