@@ -1,8 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'pp'
-require 'cgi'
-require 'open3'
 require 'observer'
 require_relative 'soundcloud.rb'
 require_relative 'mpg123player.rb'
@@ -50,6 +48,7 @@ class Cloudruby
     @ui.run
   end
 
+  # jump to next track, if current track finishes
   def update(arg)
     state = arg[:state]
     case state
@@ -58,6 +57,7 @@ class Cloudruby
     end
   end
 
+  # quit app and free all resources
   def quit
     @ui.close
     @player.close

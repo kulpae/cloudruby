@@ -1,3 +1,4 @@
+require 'cgi'
 require 'open-uri'
 require 'json'
 
@@ -11,8 +12,12 @@ class SoundCloud
 
   def load_playlist(search = nil, offset = 0)
     search = "" unless search && !search.empty?
-    url = "http://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
-          % [@cid, LIMIT, offset, CGI.escape(search)]
+    if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
+      url = "http://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
+    else
+      url = "http://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
+        % [@cid, LIMIT, offset, CGI.escape(search)]
+    end
     c = open(url) do |io|
       io.readlines
     end.join
@@ -24,7 +29,11 @@ class SoundCloud
   def nextTrack
     return @error unless @tracks
     return if @tracks.empty?
-    t = @tracks.sample
+    if @tracks.is_a? Hash
+      t = @tracks
+    else 
+      t = @tracks.sample
+    end
     #puts t["user"]["username"]
     a = Track.new t, stream_url(t)
     a

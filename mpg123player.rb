@@ -1,3 +1,5 @@
+require 'open3'
+
 class MPG123Player
   include Observable
   def initialize()
