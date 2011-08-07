@@ -28,11 +28,12 @@ class NCursesUI
       @p = NProgress.new @stdscr, 0, 0, :cyan, :blue, Ncurses.COLS-1
       while(@state != :close)
         ch = Ncurses.getch
-        #Nutils.print stdscr, 5, 0, "Test %s" % [ch], :red
-        #@win.printstring 4,0, "%-#{Ncurses.COLS-1}s" % ["Pressed #{ch}"], ColorMap.get_color(:cyan)
+        Nutils.print stdscr, 5, 0, "Test %s" % [ch], :red
         case ch
         when 110, 78
           @cloud.nextTrack
+        when 112, 80
+          @cloud.prevTrack
         when 113, 81
           @cloud.quit
         when 61, 43

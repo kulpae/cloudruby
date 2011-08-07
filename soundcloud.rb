@@ -23,6 +23,7 @@ class SoundCloud
       io.readlines
     end.join
     @tracks = JSON.parse c
+    @tracks = [@tracks] if @tracks.is_a? Hash
     @tracks.map! do |t|
       t["mpg123url"] = stream_url t
       t
@@ -34,6 +35,7 @@ class SoundCloud
   end
 
   def shufflePlaylist
+    @tracks.shuffle!
     changed
     notify_observers :state => :shuffle
   end
@@ -59,8 +61,8 @@ class SoundCloud
     if @tracks.is_a? Hash
       t = @tracks
     else 
-      playlist_pos -= 1
-      playlist_pos += @tracks.size if playlist_pos < 0
+      @playlist_pos -= 1
+      @playlist_pos += @tracks.size if @playlist_pos < 0
       t = @tracks[@playlist_pos]
       changed
       notify_observers :state => :previous, :position => @playlist_pos

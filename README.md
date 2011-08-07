@@ -44,6 +44,7 @@ Inside of Ncurses:
 <tr><td>+ | =</td><td>Increase Volume</td></tr>
 <tr><td>- | _ </td><td>Decrease Volume</td></tr>
 <tr><td>n | N</td><td>Next track</td></tr>
+<tr><td>p | P</td><td>Previous track</td></tr>
 <tr><td>m | M</td><td>Toggle mute</td></tr>
 </table>
 
