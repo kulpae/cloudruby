@@ -15,7 +15,7 @@ class MPG123Player
   def play(track)
     @last_track = track
     unless track.nil? || track.is_a?(Hash) && track[:error]
-      @pin.puts "load #{track.url}"
+      @pin.puts "load #{track["mpg123url"]}"
       @pstate = 2
     end
     changed

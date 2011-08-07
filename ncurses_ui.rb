@@ -1,11 +1,7 @@
 require 'ncurses'
-require 'rbcurse'
-require 'rbcurse/rprogress'
 require 'logger'
 
 class NCursesUI
-  include RubyCurses
-  include RubyCurses::Utils
   def initialize cloud
     @cloud = cloud
     $log = Logger.new STDERR
@@ -18,67 +14,76 @@ class NCursesUI
   end
 
   def run
-    #begin end while(@state != :close)
-    #return
     begin
-      VER::start_ncurses
-      @win = VER::Window.root_window#new :left => 0, :top => 0, :width => 0, :height => 0
-      @form = Form.new @win
-      @progress = Progress.new @form, :fraction => 0.3, :text => "30%", :bgcolor => :white, :color => :red, :width => Ncurses.COLS - 1
-      @progress.move 3,0
+      stdscr = Ncurses.initscr
+      Ncurses.start_color
+      Colors.init
+      Ncurses.keypad stdscr, true
+      Ncurses.nonl
+      Ncurses.raw
+      Ncurses.cbreak
+      Ncurses.noecho
+      Ncurses.curs_set 0
+      Ncurses::halfdelay 5
+      @p = NProgress.new @stdscr, 0, 0, :cyan, :blue, Ncurses.COLS-1
       while(@state != :close)
-        ch = keycode_tos @win.getch
+        ch = Ncurses.getch
+        #Nutils.print stdscr, 5, 0, "Test %s" % [ch], :red
         #@win.printstring 4,0, "%-#{Ncurses.COLS-1}s" % ["Pressed #{ch}"], ColorMap.get_color(:cyan)
         case ch
-        when "-1"
-        when /n|N/
+        when 110, 78
           @cloud.nextTrack
-        when /Q|q/
+        when 113, 81
           @cloud.quit
-        when /\+|=/
+        when 61, 43
           @cloud.volumeUp
-        when /-|_/
+        when 45, 95
           @cloud.volumeDown
-        when /m|M/
+        when 109, 77
           @cloud.toggleMute
         end
+
         if @error
-          @win.printstring  2, 0, "%-#{Ncurses.COLS-1}s" % ["Error: #{@error}"], ColorMap.get_color(:red)
+          Nutils.print stdscr, 0, 0, "Error: #{@error}", :red
         else
-          @win.printstring  1, 0, "%-#{Ncurses.COLS-1}s" % [@username], ColorMap.get_color(:yellow)
-          t = "%s -  %02d%% - %s" % [timestr(@time), @frac*100, timestr(@timetotal)]
-          @win.printstring  2, 2, "%-#{Ncurses.COLS-1}s" % [@title], ColorMap.get_color(:yellow)
+          Nutils.print stdscr, 1, 0, @title, :cyan
+          Nutils.print stdscr, 2, 2, "by #{@username}", :cyan
+          t = " %s - %s" % [timestr(@time), timestr(@timetotal)]
+          @p.value = @frac
+          @p.text = t
+          @p.refresh
         end
-        @progress.fraction @frac
-        @progress.text t
-        @form.repaint
-        @win.wmove 0,0
-        @win.wrefresh
-        sleep 0.05
+        Ncurses.refresh
       end
     rescue => ex
     ensure
-      @win.destroy
-      VER::stop_ncurses
+      @p.close if @p
+      Ncurses.echo
+      Ncurses.nocbreak
+      Ncurses.nl
+      Ncurses.endwin
       puts ex.inspect if ex
       puts ex.backtrace if ex
     end
   end
 
-  def update(arg)
-    #puts arg
+  def cloud_update(arg)
+
+  end
+
+  def player_update(arg)
     case arg[:state]
     when :load
       track = arg[:track]
-      if track.is_a?(Hash) && track[:error]
-        @error = track[:error]
-      elsif track.nil?
+      if track.nil?
         @error = "Nothing found!"
+      elsif track.is_a?(Hash) && track[:error]
+        @error = track[:error]
       else
         @error = nil
-        @title = track.title
-        @username = track.user
-        @timetotal = track.time
+        @title = track["title"]
+        @username = track["user"]["username"]
+        @timetotal = track["duration"].to_i/1000
       end
     when :info
       frame = arg[:frame].to_f
@@ -95,5 +100,85 @@ class NCursesUI
 
   def close
     @state = :close
+  end
+end
+
+class Nutils
+  def self.print scr, row, col, text, fg=nil, bg=nil, width = (Ncurses.COLS-1) 
+    t = "%-#{width}s" % [text]
+    Ncurses.attron(Colors.map(fg, bg)) if fg
+    Ncurses.mvwprintw scr, row, col, t
+    Ncurses.attroff(Colors.map(fg, bg)) if fg
+  end
+end
+
+class Colors
+  $map = {}
+  $counter = 0
+  def self.init
+
+    colors = [:black, :white, :red, :green, :yellow, :blue, :magenta, :cyan]
+    self.add :white, :black
+  end
+
+  def self.map(fg, bg = nil)
+    bg = :black unless bg
+    pair = [fg, bg]
+    unless $map[pair]
+      self.add fg, bg
+    end
+    $map[pair]
+  end
+
+  def self.add(fg, bg)
+    Ncurses.init_pair $counter, ncg(fg), ncg(bg)
+    pair = [fg, bg]
+    $map[pair] = Ncurses.COLOR_PAIR($counter)
+    $counter += 1
+  end
+
+  # get ncurses color object
+  def self.ncg(color)
+    Ncurses.const_get "COLOR_#{color.upcase}"
+  end
+end
+
+class NProgress
+  attr_reader :value
+  attr_accessor :text
+  def initialize scr, row, col, fg, bg, width, value = 0, text = ""
+    @width = width
+    @bg = bg
+    @fg = fg
+    @width = Ncurses.COLS - col - 1 if @width + col > Ncurses.COLS - 1
+    @winfg = Ncurses.newwin 1, 1, row, col
+    @winbg = Ncurses.newwin 1, @width, row, col
+    @value = value
+    @text = text
+    refresh
+  end
+
+  def value=(val)
+    @value = val
+    Ncurses.wresize @winfg, 1, fgw if fgw > 0
+  end
+
+  def refresh
+    Ncurses.wbkgd @winbg, Colors.map(@fg, @bg)
+    Ncurses.wbkgd @winfg, Colors.map(@bg, @fg) if fgw > 0
+    Nutils.print @winbg, 0, 0, @text
+    Nutils.print @winfg, 0, 0, @text if fgw > 0
+    Ncurses.wrefresh @winbg
+    Ncurses.wrefresh @winfg if fgw > 0
+  end
+
+  def close
+    Ncurses.delwin @winbg
+    Ncurses.delwin @winfg
+  end
+
+  private
+  def fgw
+    (@width * @value).floor
   end
 end

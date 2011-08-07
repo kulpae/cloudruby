@@ -12,13 +12,11 @@ Then install the required gems.
 
 If you are using RVM:
 <pre>
-  gem install rbcurse --pre
   gem install ncurses
 </pre>
 
 Without RVM you need to obtain write permissions with sudo:
 <pre>
-  sudo gem install rbcurse --pre
   sudo gem install ncurses
 </pre>
 

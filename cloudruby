@@ -11,10 +11,12 @@ class Cloudruby
     @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
     @player = MPG123Player.new
     @ui = NCursesUI.new self
-    @player.add_observer @ui
+    @player.add_observer @ui, :player_update
     @player.add_observer self
+    @cloud.add_observer @ui, :cloud_update
 
     @cloud.load_playlist q
+    @cloud.shufflePlaylist
     nextTrack
 
     trap("INT") do
