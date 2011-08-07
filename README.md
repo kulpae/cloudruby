@@ -34,6 +34,9 @@ From the terminal start with:
 <pre>
   cloudruby          # query the latest 100 tracks from soundcloud 
   cloudruby $search  # query the latest 100 tracks that match the $search keyword
+  
+  # play a soundcloud url directly
+  cloudruby http://soundcloud.com/crassmix/feint-clockwork-hearts-crass
 </pre>
 
 Inside of Ncurses:
