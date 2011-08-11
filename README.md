@@ -40,13 +40,16 @@ From the terminal start with:
 Inside of Ncurses:
 <table style="font-family: monospace">
 <tr><th width="50px" align="left">Key</th><th>Description</th></tr>
-<tr><td>q | Q</td><td>Quit</td></tr>
-<tr><td>+ | =</td><td>Increase Volume</td></tr>
-<tr><td>- | _ </td><td>Decrease Volume</td></tr>
-<tr><td>n | N</td><td>Next track</td></tr>
-<tr><td>p | P</td><td>Previous track</td></tr>
-<tr><td>m | M</td><td>Toggle mute</td></tr>
+<tr><td>q | Q        </td><td>Quit</td></tr>
+<tr><td>+ | =        </td><td>Increase Volume</td></tr>
+<tr><td>- | _        </td><td>Decrease Volume</td></tr>
+<tr><td>n | N | Up   </td><td>Next track</td></tr>
+<tr><td>p | P | Down </td><td>Previous track</td></tr>
+<tr><td>m | M        </td><td>Toggle mute</td></tr>
 </table>
+
+## Known Bugs
+* Going through the playlist too fast causes silence for some time
 
 ## Author
 Paul Koch [kulpae]

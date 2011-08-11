@@ -26,6 +26,9 @@ class SoundCloud
     @tracks = [@tracks] if @tracks.is_a? Hash
     @tracks.map! do |t|
       t["mpg123url"] = stream_url t
+      t["duration"] = t["duration"].nil? ? 0 : t["duration"].to_i/1000
+      t["bpm"] = t["bpm"].nil? ? 0 : t["bpm"].to_i
+      t[:error] = "Not streamable" if t["stream_url"].nil?
       t
     end
     changed
@@ -35,9 +38,10 @@ class SoundCloud
   end
 
   def shufflePlaylist
+    return unless @tracks.respond_to? "shuffle!"
     @tracks.shuffle!
     changed
-    notify_observers :state => :shuffle
+    notify_observers :state => :shuffle, :tracks => @tracks
   end
 
   def nextTrack
