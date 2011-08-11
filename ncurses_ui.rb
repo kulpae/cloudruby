@@ -12,10 +12,6 @@ class NCursesUI
     @time = 0
     @timeleft = 0
     @playlist = []
-    #@playlist = [{"title"=>"Demo", "duration"=>120},{"title"=>"Some long titles track from the soundcloud-"*5,"duration"=>433}]
-    #(1..100).each do |a|
-    #  @playlist << {"title"=>"Some title","duration"=>rand(512)}
-    #end
   end
 
   def run
@@ -243,32 +239,26 @@ class NPlaylist
     @fg = fg
     @afg = afg
     @apos = -1
-    @winbg = Ncurses.newwin effective_height, effective_width, @row, @col
+    @win = Ncurses.newwin height, width, @row, @col
     @dirty = true
     refresh
   end
 
   def width
-    [@col + @width, Ncurses.COLS].min - @col
-  end
-
-  def effective_width
-    if width == 0
+    w = [@col + @width, Ncurses.COLS].min - @col
+    if w == 0
       Ncurses.COLS - @col
     else
-      width
+      w
     end
   end
 
   def height
-    [@row + @height, Ncurses.LINES].min - @row
-  end
-
-  def effective_height
-    if height == 0
+    h = [@row + @height, Ncurses.LINES].min - @row
+    if h == 0
       Ncurses.LINES - @row
     else
-      height
+      h
     end
   end
 
@@ -278,22 +268,22 @@ class NPlaylist
   end
 
   def resize
-    Ncurses.wresize @winbg, effective_height, effective_width
+    Ncurses.wresize @win, height, width
     @dirty = true
   end
 
   def refresh
     return unless @dirty
-    Ncurses.wbkgd @winbg, Colors.map(@fg, @bg)
-    Ncurses.box @winbg, 0, 0
+    Ncurses.wbkgd @win, Colors.map(@fg, @bg)
+    Ncurses.box @win, 0, 0
     if !@list.is_a?(Array) || @list.empty?
-      Nutils.print @winbg, 1, 2, "Empty playlist", nil, nil, effective_width - 3
+      Nutils.print @win, 1, 2, "Empty playlist", nil, nil, width - 3
     else
       r = 1
-      size = effective_height - 2
+      size = height - 2
       offset = ([[size/2.0, @apos].max, [@list.size, size].max-(size/2.0)].min - size/2.0).ceil
       wr = 8
-      wl = effective_width - 3 - wr
+      wl = width - 3 - wr
       @list[offset..@list.size].each do |t|
         tl = Nutils.scroll(t["title"], wl, 0)
         if @apos == r - 1 + offset
@@ -304,20 +294,20 @@ class NPlaylist
           colfg = @fg
         end
         tr = "[%6s]" % Nutils.timestr(t["duration"]) 
-        Nutils.print @winbg, r, 1, tl, colfg, @bg, wl
-        Nutils.print @winbg, r, 2+wl, tr, colfg, @bg, wr
+        Nutils.print @win, r, 1, tl, colfg, @bg, wl
+        Nutils.print @win, r, 2+wl, tr, colfg, @bg, wr
         r += 1
-        if(r >= effective_height - 1)
+        if(r >= height - 1)
           # print arrow down
           break
         end
       end
     end
-    Ncurses.wrefresh @winbg
+    Ncurses.wrefresh @win
     @dirty = false
   end
 
   def close
-    Ncurses.delwin @winbg
+    Ncurses.delwin @win
   end
 end

@@ -39,7 +39,7 @@ From the terminal start with:
 
 Inside of Ncurses:
 <table style="font-family: monospace">
-<tr><th width="50px" align="left">Key</th><th>Description</th></tr>
+<tr><th width="70px" align="left">Key</th><th>Description</th></tr>
 <tr><td>q | Q        </td><td>Quit</td></tr>
 <tr><td>+ | =        </td><td>Increase Volume</td></tr>
 <tr><td>- | _        </td><td>Decrease Volume</td></tr>
@@ -53,6 +53,7 @@ Inside of Ncurses:
 
 ## Author
 Paul Koch [kulpae]
+
 http://www.uraniumlane.de
 
 ## License
