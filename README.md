@@ -48,6 +48,10 @@ Inside of Ncurses:
 <tr><td>m | M        </td><td>Toggle mute</td></tr>
 </table>
 
+## Screenshot
+
+![Screenshot showing ncurses user interface](http://i53.tinypic.com/m6las.jpg)
+
 ## Known Bugs
 * Going through the playlist too fast causes silence for some time
 
