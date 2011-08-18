@@ -2,14 +2,21 @@ require 'open3'
 
 class MPG123Player
   include Observable
+  attr_reader :error
+
   def initialize()
-    @pin, @pout, @perr = Open3.popen3 "mpg123 --keep-open --remote"
     @volume = 100
     @muted = false
-
-    Thread.new do watch end
-    changed
-    notify_observers :state => :inited
+    begin
+      @pin, @pout, @perr = Open3.popen3 "mpg123 --keep-open --remote"
+      Thread.new do watch end
+      changed
+      notify_observers :state => :inited
+    rescue => err
+      @error = err
+      changed
+      notify_observers :state => :error, :error => err
+    end
   end
 
   def play(track)
@@ -20,6 +27,10 @@ class MPG123Player
     end
     changed
     notify_observers :state => :load, :track => track
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   def playing?
@@ -28,10 +39,18 @@ class MPG123Player
 
   def pause()
     @pin.puts "pause"
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   def stop()
     @pin.puts "stop"
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   def volume= (val)
@@ -39,6 +58,10 @@ class MPG123Player
     @volume = [@volume, 100].min
     @volume = [@volume, 0].max
     @pin.puts "V #{@volume}"
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   def volume()
@@ -49,6 +72,10 @@ class MPG123Player
     @muted = !@muted
     @pin.puts "V 0" if @muted
     @pin.puts "V #{@volume}" unless @muted
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   def muted?
@@ -61,6 +88,10 @@ class MPG123Player
     @pin.close
     changed
     notify_observers :state => :closed
+  rescue => err
+    @error = err
+    changed
+    notify_observers :state => :error, :error => err
   end
 
   private
@@ -95,13 +126,6 @@ class MPG123Player
         end
       rescue
       end
-    end
-  end
-
-  def pio(io, to=STDOUT)
-    begin
-      to.puts io.read_nonblock 400
-    rescue
     end
   end
 end

@@ -110,6 +110,8 @@ class NCursesUI
       frames = frame + arg[:frameleft]
       @frac = frame/frames
       @time = arg[:time].to_i
+    when :error
+      @error = arg[:error]
     end
   end
 
