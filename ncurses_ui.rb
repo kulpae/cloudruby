@@ -60,7 +60,7 @@ class NCursesUI
           @p.refresh
         end
         Nutils.print stdscr, 1, 0, @title, :cyan, :black
-        Nutils.print stdscr, 2, 2, "by #{@username}", :cyan, :black
+        Nutils.print stdscr, 2, 0, "  by #{@username}", :cyan, :black
         @l.refresh
         Ncurses.refresh
       end
@@ -123,17 +123,17 @@ end
 class Nutils
   def self.print(scr, row, col, text, fg=nil, bg=nil, width = (Ncurses.COLS))
     width = [Ncurses.COLS, col+width].min - col
-    t = "%-#{width}s" % [text]
+    t = "%-#{width}s" % [scroll(text, width)]
     Ncurses.wattron(scr, Colors.map(fg, bg)) if fg
     Ncurses.mvwprintw scr, row, col, t
     Ncurses.wattroff(scr, Colors.map(fg, bg)) if fg
   end
 
-  def self.scroll(text, width, offset)
+  def self.scroll(text, width, offset=0)
     return unless text
     ellipsis = "*"
     t = text
-    if t.size+offset >= width
+    if t.size+offset > width
       t = t[offset..(width-ellipsis.size-1)] << ellipsis
     end
     t
@@ -287,7 +287,7 @@ class NPlaylist
       wr = 8
       wl = width - 3 - wr
       @list[offset..@list.size].each do |t|
-        tl = Nutils.scroll(t["title"], wl, 0)
+        tl = t["title"]
         if @apos == r - 1 + offset
           tl = ">#{tl}"
           colfg = @afg
@@ -296,7 +296,7 @@ class NPlaylist
           colfg = @fg
         end
         tr = "[%6s]" % Nutils.timestr(t["duration"]) 
-        Nutils.print @win, r, 1, tl, colfg, @bg, wl
+        Nutils.print @win, r, 1, tl, colfg, @bg, wl+1
         Nutils.print @win, r, 2+wl, tr, colfg, @bg, wr
         r += 1
         if(r >= height - 1)
