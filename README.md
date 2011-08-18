@@ -50,7 +50,7 @@ Inside of Ncurses:
 
 ## Screenshot
 
-![Screenshot showing ncurses user interface](http://i53.tinypic.com/m6las.jpg)
+![Screenshot showing ncurses user interface](https://lh5.googleusercontent.com/-G8tsAizLZeA/TkbN9K5aAFI/AAAAAAAAAG0/EhACmmuct7s/s800/cloudruby-%2525237767fc4.png)
 
 ## Known Bugs
 * Going through the playlist too fast causes silence for some time
