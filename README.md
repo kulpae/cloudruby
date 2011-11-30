@@ -46,6 +46,7 @@ Inside of Ncurses:
 <tr><td>n | N | Up   </td><td>Next track</td></tr>
 <tr><td>p | P | Down </td><td>Previous track</td></tr>
 <tr><td>m | M        </td><td>Toggle mute</td></tr>
+<tr><td>Spacebar     </td><td>Toggle playback</td></tr>
 </table>
 
 ## Screenshot

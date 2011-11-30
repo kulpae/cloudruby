@@ -2,6 +2,7 @@
 
 require 'pp'
 require 'observer'
+require 'logger'
 require_relative 'soundcloud.rb'
 require_relative 'mpg123player.rb'
 require_relative 'ncurses_ui.rb'
@@ -11,12 +12,25 @@ class Cloudruby
     @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
     @player = MPG123Player.new
     @ui = NCursesUI.new self
+
+    #@logger = Logger.new "logfile.log"
+    @logger = Logger.new STDERR
+    #@logger.level = Logger::DEBUG
+    @logger.level = Logger::Severity::UNKNOWN
+
+    @player.logger = @logger
+    @ui.logger = @logger
+    @logger.info {"logger inited"}
+    
     @player.add_observer @ui, :player_update
     @player.add_observer self
     @cloud.add_observer @ui, :cloud_update
+    @logger.info {"observer assigned"}
 
     @cloud.load_playlist q
+    @logger.info {"loaded playlist"}
     @cloud.shufflePlaylist
+    @logger.info {"playlist shuffled"}
     nextTrack
 
     trap("INT") do
@@ -42,6 +56,10 @@ class Cloudruby
     else
       @player.play track
     end
+  end
+
+  def pause
+    @player.pause
   end
 
   def volumeUp
@@ -73,6 +91,7 @@ class Cloudruby
   def quit
     @ui.close
     @player.close
+    @logger.close
     exit
   end
 end

@@ -1,14 +1,14 @@
 require 'ncurses'
-require 'logger'
 
 class NCursesUI
+  attr_accessor :logger
+
   def initialize cloud
     @cloud = cloud
-    $log = Logger.new STDERR
-    $log.level = Logger::WARN
     @state = :running
     @frac = 0
     @title = "None"
+    @op = " "
     @time = 0
     @timeleft = 0
     @playlist = []
@@ -48,6 +48,8 @@ class NCursesUI
           @cloud.volumeDown
         when 109, 77
           @cloud.toggleMute
+        when 32
+          @cloud.pause
         end
 
         if @error
@@ -59,7 +61,7 @@ class NCursesUI
           @p.text = t
           @p.refresh
         end
-        Nutils.print stdscr, 1, 0, @title, :cyan, :black
+        Nutils.print stdscr, 1, 0, "#{@op} #{@title}", :cyan, :black
         Nutils.print stdscr, 2, 0, "  by #{@username}", :cyan, :black
         @l.refresh
         Ncurses.refresh
@@ -110,6 +112,12 @@ class NCursesUI
       frames = frame + arg[:frameleft]
       @frac = frame/frames
       @time = arg[:time].to_i
+    when :pause
+      @op = "\u2161"
+    when :resume, :play
+      @op = "\u25B6"
+    when :stop
+      @op = "\u25FC"
     when :error
       @error = arg[:error]
     end
