@@ -32,7 +32,7 @@ From the terminal start with:
 
 Shortcuts:
 <table style="font-family: monospace">
-<tr><th width="70px" align="left">Key</th><th>Description</th></tr>
+<tr><th width="100px" align="left">Key</th><th>Description</th></tr>
 <tr><td>ESC | q | Q        </td><td>Quit</td></tr>
 <tr><td>+ | =        </td><td>Increase volume</td></tr>
 <tr><td>- | _        </td><td>Decrease volume</td></tr>
@@ -79,6 +79,7 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 ```
 
 There are 7 different 'colors', defined with a foreground and a background color.
+You can use only these colors: "black", "blue", "cyan", "green", "magenta", "red", "yellow", "white".
 
 ## Author
 Paul Koch [kulpae]
