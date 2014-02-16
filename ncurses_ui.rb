@@ -475,7 +475,7 @@ class NDownloadBox
 
   def refresh
     return unless @visible
-    Nutils.print @win, 0, 0, "Downloading #{@count} track#{@count.size>1?"s":""} | #{title}", :default
+    Nutils.print @win, 0, 0, "Downloading #{@count} track#{@count > 1?"s":""} | #{title}", :default
     @win.refresh
   end
 
