@@ -8,9 +8,11 @@ class MPG123Player
   def initialize()
     @volume = 100
     @muted = false
+    @inqueue = []
     begin
       @pin, @pout, @perr = Open3.popen3 "mpg123 --keep-open --remote"
-      Thread.new do watch end
+      Thread.new do mpg123read end
+      Thread.new do mpg123send end
       changed
       notify_observers :state => :inited
     rescue => err
@@ -97,18 +99,41 @@ class MPG123Player
   end
 
   def mpg123puts(out)
-    @pin.puts out
-    @logger.debug {">> #{out}" } #
+    @inqueue << out
+    @logger.debug {">> #{out}"} #
   end
 
   private
 
-  def watch
+  def mpg123send
+    while not @pin.closed?
+      begin
+        last_cmd = nil
+        @logger.debug "queue size #{@inqueue.size}"
+        @inqueue.select! do |cmd|
+          if cmd[0,4] == "load"
+            last_cmd = cmd
+            false
+          else
+            true
+          end
+        end
+        @inqueue << last_cmd unless last_cmd.nil?
+        while out = @inqueue.shift
+          @pin.puts out
+        end
+        select(nil, nil, nil, 0.4)
+      rescue 
+      end
+    end
+  end
+
+  def mpg123read
     while not @pout.closed?
       begin
         io = IO.select([@pout, @perr])
         io = io.first.first
-        response = io.read_nonblock 400
+        response = io.read_nonblock 1024
         lines = response.split "\n"
         lines.each do |line|
           @logger.debug {"<< #{line}"} #

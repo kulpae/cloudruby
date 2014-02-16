@@ -3,19 +3,21 @@
 require 'pp'
 require 'observer'
 require 'logger'
+require 'json/pure'
 require_relative 'soundcloud.rb'
 require_relative 'mpg123player.rb'
 require_relative 'ncurses_ui.rb'
 
 class Cloudruby
-  def init(q)
+  def init(q, config)
+    @config = config
     @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
     @player = MPG123Player.new
-    @ui = NCursesUI.new self
+    @ui = NCursesUI.new self, (@config[:ncurses] || @config[:curses])
 
-    #@logger = Logger.new "logfile.log"
+    # @logger = Logger.new "logfile.log"
     @logger = Logger.new STDERR
-    #@logger.level = Logger::DEBUG
+    # @logger.level = Logger::DEBUG
     @logger.level = Logger::Severity::UNKNOWN
 
     @player.logger = @logger
@@ -87,6 +89,10 @@ class Cloudruby
     end
   end
 
+  def download
+    @cloud.download @config[:download_dir]
+  end
+
   # quit app and free all resources
   def quit
     @ui.close
@@ -96,8 +102,33 @@ class Cloudruby
   end
 end
 if $0 == __FILE__
+  @config = {}
+  @query = []
+  cfile = File.join Dir.home, ".#{File.basename($0)}.json"
+
+  ARGV.each do |a|
+    if a[0, 2] == "--"
+      a = a[2..-1]
+      key, value = a.split("=", 2)
+      @config[key.to_sym] = value || true
+    else
+      @query << a
+    end
+  end
+
+  if @config[:noconfig].nil? && File.readable?(cfile)
+    File.open cfile, 'r' do |file|
+      jsonconf = JSON.load file, nil, :symbolize_names => true
+      @config = jsonconf.merge(@config)
+    end
+  end
+  
+  @config[:download_dir] ||= Dir.pwd
+
+  @query = @query.join " "
+
   c = Cloudruby.new
-  c.init ARGV[0]
+  c.init @query, @config
   c.run
 end
 

@@ -1,9 +1,22 @@
-require 'ncurses'
+require 'curses'
 
 class NCursesUI
   attr_accessor :logger
 
-  def initialize cloud
+  def initialize cloud, options = {}
+    defaults = {
+      :colors => {
+        :default => [:cyan, :blue],
+        :playlist => [:cyan, :blue],
+        :playlist_active => [:white, :blue],
+        :progress => [:cyan, :blue],
+        :progress_bar => [:blue, :cyan],
+        :title => [:cyan, :black],
+        :artist => [:cyan, :black]
+      }
+    }.freeze
+
+    @options = defaults.merge(options || {})
     @cloud = cloud
     @state = :running
     @frac = 0
@@ -16,67 +29,83 @@ class NCursesUI
 
   def run
     begin
-      stdscr = Ncurses.initscr
-      Ncurses.start_color
-      Colors.init
-      Ncurses.keypad stdscr, true
-      Ncurses.nonl
-      Ncurses.raw
-      Ncurses.cbreak
-      Ncurses.noecho
-      Ncurses.curs_set 0
-      Ncurses::halfdelay 5
-      @p = NProgress.new @stdscr, 0, 0, :cyan, :blue
-      @l = NPlaylist.new @stdscr, 4, 0, :cyan, :white, :blue, 0, 0, @playlist
+      stdscr = Curses.init_screen
+      Curses.start_color
+      Colors.init @options[:colors]
+      stdscr.keypad true
+      Curses.nonl
+      Curses.cbreak
+      Curses.noecho
+      Curses.curs_set 0
+      Curses.timeout = 5
+      @p = NProgress.new stdscr, 0, 0, :progress, :progress_bar
+      @l = NPlaylist.new stdscr, 4, 0, :playlist, :playlist_active, 0, 0, @playlist
+      @i = NInfobox.new stdscr, 4, 0, :playlist, 0, 8
+      @d = NDownloadBox.new stdscr, Curses.lines-1, 0, :default, 0, 1
       @l.active = 0
+      last_ch = nil
       while(@state != :close)
-        ch = Ncurses.getch
-        #Nutils.print stdscr, 3, 0, "Test %s" % [ch], :red
+        ch = Curses.getch
+        last_ch = ch if ch
+        Curses.setpos 3, 0
+        Curses.clrtoeol
+        # Nutils.print stdscr, 3, 0, "Test %s" % [last_ch], :red
         case ch
-        when Ncurses::KEY_RESIZE
+        when Curses::KEY_RESIZE
           @p.resize
           @l.resize
-        when 110, 78, Ncurses::KEY_DOWN
+          @i.resize
+          @d.resize
+          Curses.refresh
+        when 110, 78, 'n', 'N', Curses::KEY_DOWN
           @cloud.nextTrack
-        when 112, 80, Ncurses::KEY_UP
+        when 112, 80, 'p', 'P', Curses::KEY_UP
           @cloud.prevTrack
-        when 113, 81
+        when 113, 81, 'q', 'Q', 27, Curses::KEY_EXIT
           @cloud.quit
-        when 61, 43
+        when 61, 43, '=', '+'
           @cloud.volumeUp
-        when 45, 95
+        when 45, 95, '-', '_'
           @cloud.volumeDown
-        when 109, 77
+        when 109, 77, 'm', 'M'
           @cloud.toggleMute
-        when 32
+        when 68, 100, 'd', 'D'
+          @cloud.download
+        when 118, 86, 'v', 'V'
+          @i.visible = !@i.visible
+          @l.dirty = true
+        when 32, ' '
           @cloud.pause
         end
 
         if @error
           Nutils.print stdscr, 3, 0, "Error: #{@error}", :red
-        else
-          tr = " %s " % [Nutils.timestr(@timetotal)]
-          t = " %-#{Ncurses.COLS-tr.size-1}s%s" % [Nutils.timestr(@time), tr]
-          @p.value = @frac
-          @p.text = t
-          @p.refresh
+          Curses.refresh
         end
-        Nutils.print stdscr, 1, 0, "#{@op} #{@title}", :cyan, :black
-        Nutils.print stdscr, 2, 0, "  by #{@username}", :cyan, :black
+        tr = " %s " % [Nutils.timestr(@timetotal)]
+        t = " %-#{Curses.cols-tr.size-1}s%s" % [Nutils.timestr(@time), tr]
+        @p.value = @frac
+        @p.text = t
+        @p.refresh
+        Nutils.print stdscr, 1, 0, "#{@op} #{@title}", :title
+        Nutils.print stdscr, 2, 0, "  by #{@username}", :artist
         @l.refresh
-        Ncurses.refresh
+        @i.refresh
+        @d.refresh
+        stdscr.refresh
       end
     rescue => ex
     ensure
       @l.close if @l
       @p.close if @p
-      Ncurses.echo
-      Ncurses.nocbreak
-      Ncurses.nl
-      Ncurses.endwin
+      stdscr.close
+      Curses.echo
+      Curses.nocbreak
+      Curses.nl
+      Curses.close_screen
       puts ex.inspect if ex
       puts ex.backtrace if ex
-      #Colors.debug
+      # Colors.debug
     end
   end
 
@@ -91,10 +120,28 @@ class NCursesUI
     when :next, :previous
       pos = arg[:position]
       @l.active = pos if @l
+    when :download
+      if arg[:error]
+        @error = arg[:error]
+      end
+      if arg[:count]
+        count = arg[:count]
+        if(count > 0)
+          @l.height = -1
+          @d.visible = true
+          @d.count = count
+          @d.title = arg[:name] if arg[:name]
+        else
+          @l.height = 0
+          @d.visible = false
+          @d.title = ""
+        end
+      end
     end
   end
 
   def player_update(arg)
+
     case arg[:state]
     when :load
       track = arg[:track]
@@ -129,12 +176,13 @@ class NCursesUI
 end
 
 class Nutils
-  def self.print(scr, row, col, text, fg=nil, bg=nil, width = (Ncurses.COLS))
-    width = [Ncurses.COLS, col+width].min - col
+  def self.print(scr, row, col, text, color, width = (Curses.cols))
+    width = [Curses.cols, col+width].min - col
     t = "%-#{width}s" % [scroll(text, width)]
-    Ncurses.wattron(scr, Colors.map(fg, bg)) if fg
-    Ncurses.mvwprintw scr, row, col, t
-    Ncurses.wattroff(scr, Colors.map(fg, bg)) if fg
+    scr.attron(Colors.map(color)) if color
+    scr.setpos row, col
+    scr.addstr t
+    scr.attroff(Colors.map(color)) if color
   end
 
   def self.scroll(text, width, offset=0)
@@ -157,119 +205,126 @@ end
 class Colors
   $map = {}
   $counter = 0
-  def self.init
-
-    colors = [:black, :white, :red, :green, :yellow, :blue, :magenta, :cyan]
-    self.add :white, :black
-  end
-
-  def self.map(fg, bg = nil)
-    pair = [fg, bg]
-    unless $map.has_key? pair
-      self.add fg, bg
+  def self.init colormap = {}
+    colormap.each do |key, colors|
+      self.add(key, colors[0], colors[1])
     end
-    $map[pair]
   end
 
-  def self.add(fg, bg)
-    Ncurses.init_pair $counter, ncg(fg), ncg(bg)
-    pair = [fg, bg]
-    $map[pair] = Ncurses.COLOR_PAIR($counter)
+  def self.map(key)
+    $map[key] || $map[:default]
+  end
+
+  def self.add(key, fg, bg)
+    Curses.init_pair $counter, ncg(fg), ncg(bg)
+    $map[key] = Curses.color_pair $counter
     $counter += 1
   end
 
   def self.debug
+    puts "colors supported: #{Curses.colors}"
     puts "map: #{$map}"
   end
   # get ncurses color constant
   def self.ncg(color)
     color = :black unless color
-    Ncurses.const_get "COLOR_#{color.upcase}"
+    Curses.const_get "COLOR_#{color.upcase}"
   end
 end
 
 class NProgress
   attr_reader :value
   attr_accessor :text
-  def initialize scr, row, col, fg, bg, width=0, value = 0, text = ""
+  def initialize scr, row, col, color, bar_color, width=0, value = 0, text = ""
     @width = width
-    @bg = bg
-    @fg = fg
+    @color = color
+    @bar_color = bar_color
     @row = row
     @col = col
-    @winfg = Ncurses.newwin 1, 1, @row, @col
-    @winbg = Ncurses.newwin 1, width(), @row, @col
+    @winfg = Curses::Window.new 1, 1, @row, @col
+    @winbg = Curses::Window.new 1, self.width, @row, @col
     @value = value
     @text = text
     refresh
   end
 
   def width
-    [@col + @width, Ncurses.COLS].min - @col
+    [@col + @width, Curses.cols].min - @col
   end
 
   def value=(val)
     @value = val
-    Ncurses.wresize @winfg, 1, fgw if fgw > 0
+    @winfg.resize(1, fgw) if fgw > 0
   end
 
   def refresh
-    Ncurses.wbkgd @winbg, Colors.map(@fg, @bg)
-    Ncurses.wbkgd @winfg, Colors.map(@bg, @fg) if fgw > 0
-    Nutils.print @winbg, 0, 0, @text
-    Nutils.print @winfg, 0, 0, @text if fgw > 0
-    Ncurses.wrefresh @winbg
-    Ncurses.wrefresh @winfg if fgw > 0
+    offset = fgw
+    Nutils.print @winbg, 0, offset, @text[offset..-1], @color
+    Nutils.print @winfg, 0, 0, @text, @bar_color if fgw > 0
+    @winbg.refresh
+    @winfg.refresh if fgw > 0
   end
   
   def resize
   end
 
   def close
-    Ncurses.delwin @winbg
-    Ncurses.delwin @winfg
+    @winbg.close
+    @winfg.close
   end
 
   private
   def fgw
-    w = width() == 0 ? Ncurses.COLS - @col : width()
+    w = width() == 0 ? Curses.cols - @col : width()
     (w * @value).floor
   end
 end
 
 class NPlaylist
   attr_writer :list
-  def initialize scr, row, col, fg, afg, bg, w, h, l
+  attr_accessor :dirty
+  def initialize scr, row, col, color, active_color, w, h, l
     @list = l
     @row = row
     @col = col
     @width = w
     @height = h
-    @bg = bg
-    @fg = fg
-    @afg = afg
+    @color = color
+    @active_color = active_color
     @apos = -1
-    @win = Ncurses.newwin height, width, @row, @col
+    @win = Curses::Window.new height, width, @row, @col
     @dirty = true
     refresh
   end
 
   def width
-    w = [@col + @width, Ncurses.COLS].min - @col
-    if w == 0
-      Ncurses.COLS - @col
+    w = [@col + @width, Curses.cols].min - @col
+    if w <= 0
+      Curses.cols - @col + w
     else
       w
     end
   end
 
   def height
-    h = [@row + @height, Ncurses.LINES].min - @row
-    if h == 0
-      Ncurses.LINES - @row
+    h = [@row + @height, Curses.lines].min - @row
+    if h <= 0
+      Curses.lines - @row + h
     else
       h
     end
+  end
+
+  def width=(val)
+    @width = val
+    resize
+    refresh
+  end
+
+  def height=(val)
+    @height = val
+    resize
+    refresh
   end
 
   def active=(pos)
@@ -278,34 +333,34 @@ class NPlaylist
   end
 
   def resize
-    Ncurses.wresize @win, height, width
+    @win.resize height, width
     @dirty = true
   end
 
   def refresh
     return unless @dirty
-    Ncurses.wbkgd @win, Colors.map(@fg, @bg)
-    Ncurses.box @win, 0, 0
     if !@list.is_a?(Array) || @list.empty?
-      Nutils.print @win, 1, 2, "Empty playlist", nil, nil, width - 3
+      Nutils.print @win, 1, 2, "Empty playlist", @color, width - 3
     else
       r = 1
       size = height - 2
       offset = ([[size/2.0, @apos].max, [@list.size, size].max-(size/2.0)].min - size/2.0).ceil
-      wr = 8
-      wl = width - 3 - wr
+
       @list[offset..@list.size].each do |t|
         tl = t["title"]
         if @apos == r - 1 + offset
           tl = ">#{tl}"
-          colfg = @afg
+          color = @active_color
         else
           tl = " #{tl}"
-          colfg = @fg
+          color = @color
         end
         tr = "[%6s]" % Nutils.timestr(t["duration"]) 
-        Nutils.print @win, r, 1, tl, colfg, @bg, wl+1
-        Nutils.print @win, r, 2+wl, tr, colfg, @bg, wr
+        tr = "[D]#{tr}" if t["downloadable"]
+        wr = tr.size
+        wl = width - 3- wr
+        Nutils.print @win, r, 1, tl, color, wl+1
+        Nutils.print @win, r, 2+wl, tr, color, wr
         r += 1
         if(r >= height - 1)
           # print arrow down
@@ -313,11 +368,118 @@ class NPlaylist
         end
       end
     end
-    Ncurses.wrefresh @win
+    @win.attron(Colors.map(@color)) if @color
+    @win.box 0, 0
+    @win.attroff(Colors.map(@color)) if @color
+    @win.refresh
     @dirty = false
   end
 
   def close
-    Ncurses.delwin @win
+    @win.close
+  end
+end
+
+class NInfobox
+  attr_accessor :visible
+  def initialize scr, row, col, color, w, h
+    @scr = scr
+    @row = row
+    @col = col
+    @color = color
+    @width = w
+    @height = h
+    @win = Curses::Window.new height, width, @row, @col
+    @visible = false
+    refresh
+  end
+
+  def width
+    w = [@col + @width, Curses.cols].min - @col
+    if w == 0
+      Curses.cols - @col
+    else
+      w
+    end
+  end
+
+  def height
+    h = [@row + @height, Curses.lines].min - @row
+    if h == 0
+      Curses.lines - @row
+    else
+      h
+    end
+  end
+
+  def resize
+    @win.resize height, width
+  end
+
+  def refresh
+    return unless @visible
+    Nutils.print @win, 1, 2, "Cloudruby v1", :default
+    Nutils.print @win, 2, 4, "Curses version: #{(Curses.const_defined?"VERSION")?Curses::VERSION : "N/A"}", :default
+    Nutils.print @win, 3, 4, "Ruby version: #{RUBY_VERSION}", :default
+    Nutils.print @win, 4, 4, "Author: kulpae <my.shando@gmail.com>", :artist
+    Nutils.print @win, 5, 4, "Website: uraniumlane.net", :title
+    Nutils.print @win, 6, 4, "License: MIT", :default
+    @win.attron(Colors.map(@color)) if @color
+    @win.box 0, 0
+    @win.attroff(Colors.map(@color)) if @color
+    @win.refresh
+  end
+
+  def close
+    @win.close
+  end
+end
+
+class NDownloadBox
+  attr_accessor :visible, :count, :title
+  def initialize scr, row, col, color, w, h
+    @scr = scr
+    @row = row
+    @col = col
+    @color = color
+    @width = w
+    @height = h
+    @win = Curses::Window.new height, width, @row, @col
+    @visible = false
+    @count = 0
+    @title = ""
+    refresh
+  end
+
+  def width
+    w = [@col + @width, Curses.cols].min - @col
+    if w == 0
+      Curses.cols - @col
+    else
+      w
+    end
+  end
+
+  def height
+    h = [@row + @height, Curses.lines].min - @row
+    if h == 0
+      Curses.lines - @row
+    else
+      h
+    end
+  end
+
+  def resize
+    @win.resize height, width
+  end
+
+  def refresh
+    return unless @visible
+    Nutils.print @win, 0, 0, "Downloading #{@count} tracks | #{title}", :default
+    @win.refresh
+  end
+
+  def close
+    @win.close
   end
 end
