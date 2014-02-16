@@ -31,7 +31,7 @@ class Cloudruby
 
     @cloud.load_playlist q
     @logger.info {"loaded playlist"}
-    @cloud.shufflePlaylist
+    @cloud.shufflePlaylist unless @config[:"no-shuffle"]
     @logger.info {"playlist shuffled"}
     nextTrack
 

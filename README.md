@@ -32,7 +32,7 @@ From the terminal start with:
 
 Shortcuts:
 <table style="font-family: monospace">
-<tr><th width="100px" align="left">Key</th><th>Description</th></tr>
+<tr><th width="160px" align="left">Key</th><th>Description</th></tr>
 <tr><td>ESC | q | Q        </td><td>Quit</td></tr>
 <tr><td>+ | =        </td><td>Increase volume</td></tr>
 <tr><td>- | _        </td><td>Decrease volume</td></tr>
@@ -50,6 +50,8 @@ With 'd' or 'D' you can download a downloadable file from soundcloud. The file
 will be placed inside your download directory specified with **--download_dir** argument
 or inside your **~/.cloudruby.json**. If none of these are given, the current working 
 directory is used.
+
+A track is indicated by a **[D]** in the playlist if it's downloadable.
 
 ## Screenshot
 
