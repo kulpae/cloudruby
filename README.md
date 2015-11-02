@@ -23,7 +23,7 @@ Without RVM you need to obtain write permissions with sudo:
 ## Usage
 From the terminal start with:
 <pre>
-  cloudruby          # query the latest 100 tracks from soundcloud 
+  cloudruby          # query the latest 100 tracks from soundcloud (dashboard with token)
   cloudruby $search  # query the latest 100 tracks that match the $search keyword
   
   # play a soundcloud url directly
@@ -43,6 +43,13 @@ Shortcuts:
 <tr><td>v | V        </td><td>About dialog</td></tr>
 <tr><td>Spacebar     </td><td>Toggle playback</td></tr>
 </table>
+
+## User stream (also dashboard) 
+By configuring an access token for your account the latest 100 tracks
+from your stream are loaded, much like being logged in on soundcloud
+website.
+
+[Generate your token here](http://ninsei.thruhere.net/soundcloud.php)
 
 ## Download
 
@@ -66,6 +73,7 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 ```json
 {
   "download_dir": "~/music",
+  "token": "0-00000-00000000-000000000000000",
   "curses": {
     "colors": {
       "default": ["white", "black"],
@@ -87,6 +95,8 @@ You can use only these colors: "black", "blue", "cyan", "green", "magenta", "red
 Paul Koch [kulpae]
 
 http://www.uraniumlane.net/users/kulpae
+
+Contributors [magnific0](http://www.github.com/magnific0) (user stream).
 
 ## License
 see LICENSE.

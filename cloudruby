@@ -11,7 +11,7 @@ require_relative 'ncurses_ui.rb'
 class Cloudruby
   def init(q, config)
     @config = config
-    @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
+    @cloud = SoundCloud.new "9b44801444d1c58c6884e4bac0f381bc", @config[:token]
     @player = MPG123Player.new
     @ui = NCursesUI.new self, (@config[:ncurses] || @config[:curses])
 
