@@ -5,8 +5,10 @@ require 'json/pure'
 class SoundCloud
   include Observable
   LIMIT = 100
+  attr_accessor :logger
 
-  def initialize(client_id)
+  def initialize client_id, params = {}
+    params.each { |key, value| send "#{key}=", value }
     @cid = client_id
     @playlist_pos = -1
     @download_queue = []
@@ -16,9 +18,9 @@ class SoundCloud
   def load_playlist(search = nil, offset = 0)
     search = "" unless search && !search.empty?
     if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
-      url = "http://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
+      url = "https://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
     else
-      url = "http://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
+      url = "https://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
         % [@cid, LIMIT, offset, CGI.escape(search)]
     end
     c = open(url) do |io|

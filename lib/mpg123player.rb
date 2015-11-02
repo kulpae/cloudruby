@@ -1,13 +1,28 @@
 require 'open3'
+begin
+  require 'httpclient'
+rescue LoadError
+end
 
 class MPG123Player
   include Observable
   attr_reader :error, :paused
   attr_accessor :logger
 
-  def initialize()
+  def version
+    return "Audio backend: #{`mpg123 --version`.strip}"
+  end
+
+  def initialize params = {}
+    params.each { |key, value| send "#{key}=", value }
+    unless defined? HTTPClient
+      puts "Mpg123 requires HTTPClient to work"
+      exit false
+    end
+
     @volume = 100
     @muted = false
+    @logger.info version
     @inqueue = []
     begin
       @pin, @pout, @perr = Open3.popen3 "mpg123 --keep-open --remote"
@@ -25,7 +40,11 @@ class MPG123Player
   def play(track)
     @last_track = track
     unless track.nil? || track.is_a?(Hash) && track[:error]
-      mpg123puts "load #{track["mpg123url"]}"
+      # mpg123puts "load #{track["mpg123url"]}"
+      strhead   = HTTPClient.new.head(track['mpg123url'])
+      streamuri = strhead.header['Location'][0]
+      streamuri.sub! 'https', 'http'
+      mpg123puts "load #{streamuri}"
       @pstate = 2
     end
     changed

@@ -5,19 +5,19 @@ for playback.
 
 ## Installation
 
-Install mpg123, ruby 1.9.2, curses and json_pure with a package manager of your
+Install mpg123, ruby 1.9.2+, curses and json_pure with a package manager of your
 destribution.
 
 Then install the required gems.
 
 If you are using RVM:
 <pre>
-  gem install curses json_pure
+  gem install curses json_pure httpclient open-uri
 </pre>
 
 Without RVM you need to obtain write permissions with sudo:
 <pre>
-  sudo gem install curses json_pure
+  sudo gem install curses json_pure httpclient open-uri
 </pre>
 
 ## Usage
@@ -40,7 +40,7 @@ Shortcuts:
 <tr><td>p | P | Down </td><td>Previous track</td></tr>
 <tr><td>m | M        </td><td>Toggle mute</td></tr>
 <tr><td>d | D        </td><td>Download file</td></tr>
-<tr><td>v | V        </td><td>About dialog</td></tr>
+<tr><td>v | V        </td><td>Info dialog</td></tr>
 <tr><td>Spacebar     </td><td>Toggle playback</td></tr>
 </table>
 
@@ -66,6 +66,7 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 ```json
 {
   "download_dir": "~/music",
+  "audio-backend": "mpg123",
   "curses": {
     "colors": {
       "default": ["white", "black"],
@@ -74,7 +75,8 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
       "progress": ["cyan", "black"],
       "progress_bar": ["blue", "white"],
       "title": ["cyan"],
-      "artist": ["magenta"]
+      "artist": ["magenta"],
+      "status": ["red"]
     }
   }
 }
@@ -83,10 +85,13 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 There are 7 different 'colors', defined with a foreground and a background color.
 You can use only these colors: "black", "blue", "cyan", "green", "magenta", "red", "yellow", "white".
 
-## Author
-Paul Koch [kulpae]
+## Authors
+* Paul Koch [kulpae]
+  http://www.uraniumlane.net/users/kulpae
 
-http://www.uraniumlane.net/users/kulpae
+* Jacco
+  https://github.com/magnific0
+
 
 ## License
 see LICENSE.

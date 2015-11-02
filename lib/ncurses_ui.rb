@@ -1,9 +1,25 @@
 require 'curses'
 
-class NCursesUI
-  attr_accessor :logger
+class ::Hash
+  def deep_merge(second)
+    merger = proc { |key, v1, v2| Hash === v1 && Hash === v2 ? v1.merge(v2, &merger) : v2 }
+    self.merge(second, &merger)
+  end
+end
 
-  def initialize cloud, options = {}
+class NCursesUI
+  attr_accessor :logger, :audio_backend
+
+  def initialize cloud, options = {}, params = {}
+    params.each { |key, value| send "#{key}=", value }
+
+    if not @audio_backend
+      @audio_backend = Object.new
+      def @audio_backend.version
+        "Audio backend: None" 
+      end 
+    end
+
     defaults = {
       :colors => {
         :default => [:cyan, :blue],
@@ -12,11 +28,12 @@ class NCursesUI
         :progress => [:cyan, :blue],
         :progress_bar => [:blue, :cyan],
         :title => [:cyan, :black],
-        :artist => [:cyan, :black]
+        :artist => [:cyan, :black],
+        :status => [:magenta, :black]
       }
     }.freeze
 
-    @options = defaults.merge(options || {})
+    @options = defaults.deep_merge(options || {})
     @cloud = cloud
     @state = :running
     @frac = 0
@@ -40,7 +57,7 @@ class NCursesUI
       Curses.timeout = 5
       @p = NProgress.new stdscr, 0, 0, :progress, :progress_bar
       @l = NPlaylist.new stdscr, 4, 0, :playlist, :playlist_active, 0, 0, @playlist
-      @i = NInfobox.new stdscr, 4, 0, :playlist, 0, 8
+      @i = NInfobox.new self, stdscr, 4, 0, :playlist, 0, 9
       @d = NDownloadBox.new stdscr, Curses.lines-1, 0, :default, 0, 1
       @l.active = 0
       last_ch = nil
@@ -78,8 +95,10 @@ class NCursesUI
           @cloud.pause
         end
 
-        if @error
-          Nutils.print stdscr, 3, 0, "Error: #{@error}", :red
+        statusLine = @status || @error
+
+        if statusLine
+          Nutils.print stdscr, 3, 0, "#{statusLine}", :status
           Curses.refresh
         end
         tr = " %s " % [Nutils.timestr(@timetotal)]
@@ -122,7 +141,7 @@ class NCursesUI
       @l.active = pos if @l
     when :download
       if arg[:error]
-        @error = arg[:error]
+        @error = "Error: #{arg[:error]}"
       end
       if arg[:count]
         count = arg[:count]
@@ -146,13 +165,13 @@ class NCursesUI
     when :load
       track = arg[:track]
       if track.nil?
-        @error = "Nothing found!"
+        @error = "Error: Nothing found!"
       else
         @error = nil
         @title = track["title"]
         @username = track["user"]["username"]
         @timetotal = track["duration"]
-        @error = track[:error] if track[:error]
+        @error = "Error: #{track[:error]}" if track[:error]
       end
     when :info
       frame = arg[:frame].to_f
@@ -166,7 +185,19 @@ class NCursesUI
     when :stop
       @op = "\u25FC"
     when :error
-      @error = arg[:error]
+      @error = "Error: #{arg[:error]}"
+    when :status
+      if arg[:type]
+        @status = "#{arg[:type]}: #{arg[:value]}"
+        if @statusTimeout
+          @statusTimeout.exit
+        end
+        @statusTimeout = Thread.new do
+          sleep 5
+          @status = nil
+          @statusTimeout = nil
+        end
+      end
     end
   end
 
@@ -382,7 +413,8 @@ end
 
 class NInfobox
   attr_accessor :visible
-  def initialize scr, row, col, color, w, h
+  def initialize parent, scr, row, col, color, w, h
+    @parent = parent
     @scr = scr
     @row = row
     @col = col
@@ -418,12 +450,13 @@ class NInfobox
 
   def refresh
     return unless @visible
-    Nutils.print @win, 1, 2, "Cloudruby v1", :default
-    Nutils.print @win, 2, 4, "Curses version: #{(Curses.const_defined?"VERSION")?Curses::VERSION : "N/A"}", :default
-    Nutils.print @win, 3, 4, "Ruby version: #{RUBY_VERSION}", :default
-    Nutils.print @win, 4, 4, "Author: kulpae <my.shando@gmail.com>", :artist
-    Nutils.print @win, 5, 4, "Website: uraniumlane.net", :title
-    Nutils.print @win, 6, 4, "License: MIT", :default
+    Nutils.print @win, 1, 2, "Cloudruby v1.1", :default
+    Nutils.print @win, 2, 4, "UI Toolkit: #{(Curses.const_defined?"VERSION")?Curses::VERSION : "N/A"}", :default
+    Nutils.print @win, 3, 4, "#{@parent.audio_backend.version}", :default
+    Nutils.print @win, 4, 4, "Ruby version: #{RUBY_VERSION}", :default
+    Nutils.print @win, 5, 4, "Author: kulpae <my.shando@gmail.com>", :artist
+    Nutils.print @win, 6, 4, "Website: uraniumlane.net", :title
+    Nutils.print @win, 7, 4, "License: MIT", :default
     @win.attron(Colors.map(@color)) if @color
     @win.box 0, 0
     @win.attroff(Colors.map(@color)) if @color

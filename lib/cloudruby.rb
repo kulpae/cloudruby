@@ -1,27 +1,30 @@
-#!/usr/bin/env ruby
-
 require 'pp'
 require 'observer'
 require 'logger'
 require 'json/pure'
 require_relative 'soundcloud.rb'
 require_relative 'mpg123player.rb'
+require_relative 'gstplayer.rb'
 require_relative 'ncurses_ui.rb'
 
 class Cloudruby
   def init(q, config)
     @config = config
-    @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0"
-    @player = MPG123Player.new
-    @ui = NCursesUI.new self, (@config[:ncurses] || @config[:curses])
 
     # @logger = Logger.new "logfile.log"
     @logger = Logger.new STDERR
     # @logger.level = Logger::DEBUG
     @logger.level = Logger::Severity::UNKNOWN
 
-    @player.logger = @logger
-    @ui.logger = @logger
+    @cloud = SoundCloud.new "76796f79392f9398288cdac3fe3391c0", logger: @logger
+    case @config[:"audio-backend"] 
+    when "gstreamer"
+      @player = GstPlayer.new logger: @logger, audio_params: @config[:"audio-params"]
+    else
+      @player = MPG123Player.new logger: @logger
+    end
+    @ui = NCursesUI.new self, (@config[:ncurses] || @config[:curses]), logger: @logger, audio_backend: @player
+
     @logger.info {"logger inited"}
     
     @player.add_observer @ui, :player_update
@@ -101,34 +104,3 @@ class Cloudruby
     exit
   end
 end
-if $0 == __FILE__
-  @config = {}
-  @query = []
-  cfile = File.join Dir.home, ".#{File.basename($0)}.json"
-
-  ARGV.each do |a|
-    if a[0, 2] == "--"
-      a = a[2..-1]
-      key, value = a.split("=", 2)
-      @config[key.to_sym] = value || true
-    else
-      @query << a
-    end
-  end
-
-  if @config[:noconfig].nil? && File.readable?(cfile)
-    File.open cfile, 'r' do |file|
-      jsonconf = JSON.load file, nil, :symbolize_names => true
-      @config = jsonconf.merge(@config)
-    end
-  end
-  
-  @config[:download_dir] ||= Dir.pwd
-
-  @query = @query.join " "
-
-  c = Cloudruby.new
-  c.init @query, @config
-  c.run
-end
-
