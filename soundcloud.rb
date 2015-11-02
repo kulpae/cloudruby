@@ -6,8 +6,9 @@ class SoundCloud
   include Observable
   LIMIT = 100
 
-  def initialize(client_id)
+  def initialize(client_id, token = nil)
     @cid = client_id
+    @token = token
     @playlist_pos = -1
     @download_queue = []
     @dthread = Thread.new do downloader end
@@ -15,7 +16,10 @@ class SoundCloud
 
   def load_playlist(search = nil, offset = 0)
     search = "" unless search && !search.empty?
-    if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
+    if search == "" && @token
+      url = "https://api.soundcloud.com/me/activities/tracks/affiliated.json?oauth_token=%s&filter=streamable&limit=%d&offset=%d" \
+        % [@token, LIMIT, offset]
+    elsif search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
       url = "http://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
     else
       url = "http://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
@@ -26,7 +30,13 @@ class SoundCloud
     end.join
     @tracks = JSON.parse c
     @tracks = [@tracks] if @tracks.is_a? Hash
+    if  @tracks[0].key?("collection")
+      @tracks = @tracks[0]["collection"]
+    end
     @tracks.map! do |t|
+      if t.key?("origin")
+        t = t["origin"]
+      end
       t["mpg123url"] = client_url t['stream_url']
       t["download"] = client_url t['download_url']
       t["duration"] = t["duration"].nil? ? 0 : t["duration"].to_i/1000
@@ -135,7 +145,7 @@ class SoundCloud
   private
 
   def client_url(url)
-    "#{url}?client_id=%s" % [@cid] if url
+    "#{url}?client_id=%s".gsub(/(https+)/, 'http') % [@cid] if url
   end
 end
 
