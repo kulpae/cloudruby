@@ -1,4 +1,7 @@
-require 'gst'
+begin
+  require 'gst'
+rescue LoadError
+end
 
 class GstPlayer
   include Observable
@@ -16,6 +19,10 @@ class GstPlayer
 
   def initialize params = {}
     params.each { |key, value| send "#{key}=", value }
+    unless defined? Gst
+      puts "Gstream backend requires gstream gem"
+      exit false
+    end
 
     @logger.info version
     @inqueue = []
