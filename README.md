@@ -6,7 +6,7 @@ for playback.
 ## Installation
 
 Install mpg123, ruby 1.9.2+, curses and json_pure with a package manager of your
-distribution.
+destribution.
 
 Then install the required gems.
 
@@ -49,13 +49,13 @@ More detailed information can be found in the `doc` folder.
 ## Download
 
 With 'd' or 'D' you can download a downloadable file from soundcloud. The file
-will be placed inside your download directory specified with **--download_dir** argument
-or inside your **~/.cloudruby.json**. If none of these are given, the current working 
+will be placed inside your download directory specified with `--download_dir` argument
+or inside your `~/.cloudruby.json`. If none of these are given, the current working 
 directory is used.
 
 A track is indicated by a **[D]** in the playlist if it's downloadable.
 
-## Screenshot
+## Screenshots
 
 ![Screenshot showing curses user interface](https://www.dropbox.com/s/j6uuqf56sgb53tw/cloudruby-default.png?raw=1)
 ![Screenshot showing customized curses user interface](https://www.dropbox.com/s/3re0xiqkd2403to/cloudruby-custom.png?raw=1)
@@ -63,7 +63,7 @@ A track is indicated by a **[D]** in the playlist if it's downloadable.
 
 ## Config
 
-Cloudruby can be customized through **~/.cloudruby.json** file.
+Cloudruby can be customized through `~/.cloudruby.json` file.
 
 ### Example
 ```json
@@ -85,8 +85,7 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 }
 ```
 
-There are 7 different 'colors', defined with a foreground and a background color.
-You can use only these colors: "black", "blue", "cyan", "green", "magenta", "red", "yellow", "white".
+Read more about styling [here](doc/colors.md)
 
 ## Maintainer
 * [Paul Koch [kulpae]](http://www.uraniumlane.net/users/kulpae)
