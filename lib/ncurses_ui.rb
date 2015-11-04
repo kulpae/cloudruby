@@ -27,10 +27,12 @@ class NCursesUI
         :playlist_active => [:white, :blue],
         :progress => [:cyan, :blue],
         :progress_bar => [:blue, :cyan],
+        :buffer_bar => [:blue, :magenta],
         :title => [:cyan, :black],
         :artist => [:cyan, :black],
         :status => [:magenta, :black]
-      }
+      },
+      :palette => {}
     }.freeze
 
     @options = defaults.deep_merge(options || {})
@@ -48,14 +50,14 @@ class NCursesUI
     begin
       stdscr = Curses.init_screen
       Curses.start_color
-      Colors.init @options[:colors]
+      Colors.init @options[:colors], @options[:palette]
       stdscr.keypad true
       Curses.nonl
       Curses.cbreak
       Curses.noecho
       Curses.curs_set 0
       Curses.timeout = 5
-      @p = NProgress.new stdscr, 0, 0, :progress, :progress_bar
+      @p = NProgress.new stdscr, 0, 0, :progress, :progress_bar, :buffer_bar
       @l = NPlaylist.new stdscr, 4, 0, :playlist, :playlist_active, 0, 0, @playlist
       @i = NInfobox.new self, stdscr, 4, 0, :playlist, 0, 9
       @d = NDownloadBox.new stdscr, Curses.lines-1, 0, :default, 0, 1
@@ -95,15 +97,14 @@ class NCursesUI
           @cloud.pause
         end
 
-        statusLine = @status || @error
+        statusLine = @status || @error || ""
 
-        if statusLine
-          Nutils.print stdscr, 3, 0, "#{statusLine}", :status
-          Curses.refresh
-        end
+        Nutils.print stdscr, 3, 0, "#{statusLine}", :status
+        Curses.refresh
         tr = " %s " % [Nutils.timestr(@timetotal)]
         t = " %-#{Curses.cols-tr.size-1}s%s" % [Nutils.timestr(@time), tr]
         @p.value = @frac
+        @p.subvalue = (@bufferPercentage || 0)/100.0
         @p.text = t
         @p.refresh
         Nutils.print stdscr, 1, 0, "#{@op} #{@title}", :title
@@ -117,7 +118,7 @@ class NCursesUI
     ensure
       @l.close if @l
       @p.close if @p
-      stdscr.close
+      stdscr.close if stdscr
       Curses.echo
       Curses.nocbreak
       Curses.nl
@@ -130,6 +131,8 @@ class NCursesUI
 
   def cloud_update(arg)
     case arg[:state]
+    when :error
+      @error = "Error: #{arg[:error]}"
     when :load
       @playlist |= arg[:tracks]
       @l.list = @playlist if @l
@@ -155,6 +158,10 @@ class NCursesUI
           @d.visible = false
           @d.title = ""
         end
+      end
+    when :status
+      if arg[:type]
+        status("#{arg[:type]}: #{arg[:value]}")
       end
     end
   end
@@ -186,17 +193,11 @@ class NCursesUI
       @op = "\u25FC"
     when :error
       @error = "Error: #{arg[:error]}"
+    when :buffer
+      @bufferPercentage = arg[:value].to_i || 0
     when :status
       if arg[:type]
-        @status = "#{arg[:type]}: #{arg[:value]}"
-        if @statusTimeout
-          @statusTimeout.exit
-        end
-        @statusTimeout = Thread.new do
-          sleep 5
-          @status = nil
-          @statusTimeout = nil
-        end
+        status("#{arg[:type]}: #{arg[:value]}")
       end
     end
   end
@@ -204,16 +205,28 @@ class NCursesUI
   def close
     @state = :close
   end
+
+  def status msg
+    @status = msg
+    if @statusTimeout
+      @statusTimeout.exit
+    end
+    @statusTimeout = Thread.new do
+      sleep 5
+      @status = nil
+      @statusTimeout = nil
+    end
+  end
 end
 
 class Nutils
   def self.print(scr, row, col, text, color, width = (Curses.cols))
     width = [Curses.cols, col+width].min - col
     t = "%-#{width}s" % [scroll(text, width)]
-    scr.attron(Colors.map(color)) if color
+    scr.attron(Colors.pairMap(color)) if color
     scr.setpos row, col
     scr.addstr t
-    scr.attroff(Colors.map(color)) if color
+    scr.attroff(Colors.pairMap(color)) if color
   end
 
   def self.scroll(text, width, offset=0)
@@ -234,47 +247,110 @@ class Nutils
 end
 
 class Colors
-  $map = {}
-  $counter = 0
-  def self.init colormap = {}
+  $pairMap = {}
+  $colorMap = {}
+  $attrMap = {}
+  $pairCounter = 0
+  $colorCounter = 0
+  def self.init colormap = {}, palette = {}
+    Curses.use_default_colors
+    $pairCounter += 1
+
+    Curses::constants.grep(/COLOR_/).each do |c|
+      color = c.to_s.split("_")[1]
+      $colorMap[color.downcase.to_sym] = Curses.const_get "#{c}"
+      $colorCounter += 1;
+    end
+
+    if Curses.can_change_color?
+      palette.each do |name, definition|
+        if $colorCounter >= Curses.colors || name.length == 0 
+          $colorMap[name] = $colorMap[:white]
+        elsif $colorMap[name]
+          if definition.is_a? Integer
+            $colorMap[name] = definition
+          elsif definition.is_a?(Array) and definition.length == 3
+            Curses.init_color $colorMap[name], definition[0], definition[1], definition[2]
+          end
+        else
+          if definition.is_a? Integer
+            $colorMap[name] = definition
+          elsif definition.is_a?(Array) and definition.length == 3
+            $colorMap[name] = $colorCounter;
+            Curses.init_color $colorCounter, definition[0], definition[1], definition[2]
+            $colorCounter += 1;
+          end
+        end
+      end
+    end
+
     colormap.each do |key, colors|
-      self.add(key, colors[0], colors[1])
+      self.add(key, colors[0], colors[1], colors[2..-1])
     end
   end
 
-  def self.map(key)
-    $map[key] || $map[:default]
+  def self.pairMap(key)
+    ($pairMap[key] || $pairMap[:default] ) | ($attrMap[key] || 0)
   end
 
-  def self.add(key, fg, bg)
-    Curses.init_pair $counter, ncg(fg), ncg(bg)
-    $map[key] = Curses.color_pair $counter
-    $counter += 1
+  def self.add(key, fg, bg, attrs=[])
+    Curses.init_pair $pairCounter, ncg(fg), ncg(bg)
+    $pairMap[key] = Curses.color_pair $pairCounter
+    $attrMap[key] = attrs.map do |a|
+      case a.to_sym
+      when :bold
+        Curses::A_BOLD
+      when :underline
+        Curses::A_UNDERLINE
+      when :blink
+        Curses::A_BLINK
+      when :dim
+        Curses::A_DIM
+      when :normal
+        Curses::A_NORMAL
+      when :standout
+        Curses::A_STANDOUT
+      when :reverse
+        Curses::A_REVERSE
+      end
+    end.compact.reduce :|
+    $pairCounter += 1
   end
 
   def self.debug
     puts "colors supported: #{Curses.colors}"
-    puts "map: #{$map}"
+    puts "pairMap: #{$pairMap}"
+    puts "attributes: #{$attrMap}"
+    puts "colorPalette: #{$colorMap}"
   end
+
   # get ncurses color constant
   def self.ncg(color)
-    color = :black unless color
-    Curses.const_get "COLOR_#{color.upcase}"
+    if color.is_a? Integer
+      color
+    else
+      color = -1 unless color
+      color = color.to_sym
+      $colorMap[color] || -1
+    end
   end
 end
 
 class NProgress
-  attr_reader :value
+  attr_reader :value, :subvalue
   attr_accessor :text
-  def initialize scr, row, col, color, bar_color, width=0, value = 0, text = ""
+  def initialize scr, row, col, color, bar_color, subbar_color, width=0, value = 0, subvalue = 0, text = ""
     @width = width
     @color = color
     @bar_color = bar_color
+    @subbar_color = subbar_color
     @row = row
     @col = col
     @winfg = Curses::Window.new 1, 1, @row, @col
+    @winsfg = Curses::Window.new 1, 1, @row, @col
     @winbg = Curses::Window.new 1, self.width, @row, @col
     @value = value
+    @subvalue = subvalue
     @text = text
     refresh
   end
@@ -288,11 +364,19 @@ class NProgress
     @winfg.resize(1, fgw) if fgw > 0
   end
 
+  def subvalue=(val)
+    @subvalue = val
+    @winsfg.resize(1, sfgw) if sfgw > 0
+  end
+
   def refresh
-    offset = fgw
-    Nutils.print @winbg, 0, offset, @text[offset..-1], @color
+    bgOffset = [fgw, sfgw].max
+    sbOffset = fgw
+    Nutils.print @winbg, 0, bgOffset, @text[bgOffset..-1], @color
+    Nutils.print @winsfg, 0, sbOffset, @text[sbOffset..-1], @subbar_color if sfgw > 0
     Nutils.print @winfg, 0, 0, @text, @bar_color if fgw > 0
     @winbg.refresh
+    @winsfg.refresh if sfgw > 0
     @winfg.refresh if fgw > 0
   end
   
@@ -301,6 +385,7 @@ class NProgress
 
   def close
     @winbg.close
+    @winsfg.close
     @winfg.close
   end
 
@@ -308,6 +393,10 @@ class NProgress
   def fgw
     w = width() == 0 ? Curses.cols - @col : width()
     (w * @value).floor
+  end
+  def sfgw
+    w = width() == 0 ? Curses.cols - @col : width()
+    (w * @subvalue).floor
   end
 end
 
@@ -399,9 +488,13 @@ class NPlaylist
         end
       end
     end
-    @win.attron(Colors.map(@color)) if @color
+    while r < height
+      Nutils.print @win, r, 0, "", @color
+      r += 1
+    end
+    @win.attron(Colors.pairMap(@color)) if @color
     @win.box 0, 0
-    @win.attroff(Colors.map(@color)) if @color
+    @win.attroff(Colors.pairMap(@color)) if @color
     @win.refresh
     @dirty = false
   end
@@ -450,16 +543,16 @@ class NInfobox
 
   def refresh
     return unless @visible
-    Nutils.print @win, 1, 2, "Cloudruby v1.1", :default
-    Nutils.print @win, 2, 4, "UI Toolkit: #{(Curses.const_defined?"VERSION")?Curses::VERSION : "N/A"}", :default
+    Nutils.print @win, 1, 2, "Cloudruby v1.2", :default
+    Nutils.print @win, 2, 4, "UI Toolkit: #{(Curses.const_defined?"VERSION")?"#{Curses::VERSION}, #colors: #{Curses::colors}" : "N/A"}", :default
     Nutils.print @win, 3, 4, "#{@parent.audio_backend.version}", :default
     Nutils.print @win, 4, 4, "Ruby version: #{RUBY_VERSION}", :default
     Nutils.print @win, 5, 4, "Author: kulpae <my.shando@gmail.com>", :artist
     Nutils.print @win, 6, 4, "Website: uraniumlane.net", :title
     Nutils.print @win, 7, 4, "License: MIT", :default
-    @win.attron(Colors.map(@color)) if @color
+    @win.attron(Colors.pairMap(@color)) if @color
     @win.box 0, 0
-    @win.attroff(Colors.map(@color)) if @color
+    @win.attroff(Colors.pairMap(@color)) if @color
     @win.refresh
   end
 

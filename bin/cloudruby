@@ -1,8 +1,21 @@
 #!/usr/bin/env ruby
 
 require 'json/pure'
-require 'cloudruby'
-# require_relative '../lib/cloudruby'
+begin
+  require_relative '../lib/cloudruby' # from source dir
+rescue LoadError
+  begin
+    require_relative '../lib/cloudruby/lib/cloudruby' # from /usr/bin/
+  rescue LoadError
+    begin
+      require 'cloudruby' # binary installed as gem
+    rescue LoadError
+      puts "Cannot load cloudruby library. Exiting."
+      exit false
+    end
+  end
+end
+
 
 @config = {}
 @query = []

@@ -81,6 +81,8 @@ class MPG123Player
     @volume = [@volume, 100].min
     @volume = [@volume, 0].max
     mpg123puts "V #{@volume}"
+    changed
+    notify_observers :state => :status, :type => "Volume", :value => "#{@volume.to_i}%"
   rescue => err
     @error = err
     changed

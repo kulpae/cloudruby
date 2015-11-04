@@ -1,5 +1,5 @@
 
-###==Audio Backends==
+#Audio Backends
 
 Cloudruby is able to work with different audio backends.
 At the moment only mpg123 and gstreamer are supported.
@@ -17,6 +17,22 @@ where `<audio-backend>` is:
  * mpg123
  * gstreamer
 
+### Volume scale
+
+As every sound adapter can have a different volume curves (e.g. linear, logarithmic) cloudruby accepts a curvature paramter for the volume curve.
+
+```json
+{
+	"audio-backend": "gstreamer",
+	"audio-params": {
+		"audio-sink": "pulsesink",
+		"volume-curvature": 3
+	}
+}
+```
+
+The `curvature` parameter is simply an exponent of the volume. So having the `curvature` = 1 makes a linear volume curve. A `curvature` = 3 makes the same approximation to a logarithmic curve, as pulseaudio is using (7.0), so that the volume percentage of cloudruby equals the volume in the pulseaudio mixer.
+
 ###GStreamer requirements
 
 GStreamer requires following (or similar) packages installed:
@@ -27,7 +43,7 @@ GStreamer requires following (or similar) packages installed:
 * gst-plugins-good (os, for pulseaudio, oss, souphttpsrc (!))
 * gst-plugins-ugly (os, for mp3  decoding)
 
-The OS packages may be named differently on your operation system and/or destribution. These are for Arch Linux. You have to find the required packages by youself otherwise. The main point is, that there packages provide following gstreamer plugins:
+The OS packages may be named differently on your operation system and/or distribution. These are for Arch Linux. You have to find the required packages by youself otherwise. The main point is, that these packages provide following gstreamer plugins:
 
 * playbin
 * \*sink (e.g. pulsesink, alsasink, oss4sink, jacksink, openalsink, ...)
@@ -54,4 +70,4 @@ __GStreamer__ accepts parameters in the following format, which are optional:
 
 By default gstreamer takes the best audio sink available and works with default parameters without configuration.
 
-When __v__ is pressed, the currently utilized audio backend and the sink (in case of gstreamer) is displayed.
+When __v__ is pressed, the currently utilized audio backend and the sink (in case of gstreamer) are displayed.

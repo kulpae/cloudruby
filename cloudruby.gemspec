@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name        = 'cloudruby'
-  s.version     = '1.1.0'
-  s.date        = '2015-11-02'
+  s.version     = '1.2.0'
+  s.date        = '2015-11-04'
   s.summary     = "Ncurses player for Soundcloud tracks in Ruby"
   s.description = <<-EOF
 == A soundcloud player written in Ruby 

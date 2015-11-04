@@ -1,6 +1,12 @@
 require 'cgi'
 require 'open-uri'
-require 'json/pure'
+require 'httpclient'
+
+begin
+  require 'json/pure'
+rescue LoadError
+  require 'json'
+end
 
 class SoundCloud
   include Observable
@@ -13,6 +19,7 @@ class SoundCloud
     @playlist_pos = -1
     @download_queue = []
     @dthread = Thread.new do downloader end
+    @dthread.run
   end
 
   def load_playlist(search = nil, offset = 0)
@@ -91,46 +98,48 @@ class SoundCloud
       filename = "#{t["permalink"]}.#{t["original_format"]}"
       path = File.join(target_dir, filename)
       pair = [path, t['download']]
+      @logger.debug {"download queued: #{pair}"}
       @download_queue << pair unless @download_queue.include? pair
-      @dthread.run
 
       changed
       notify_observers :state => :download, :count => @download_queue.size
     else
       changed
-      notify_observers :state => :download, :error => "Not downloadable"
+      notify_observers :state => :status, :type => "Download", :value => "Not granted by content owner"
     end
   end
 
   # download thread
   def downloader
     loop do
-      size = @download_queue.size
       while d = @download_queue.shift
         path = d[0]
         uri = d[1]
+        size = @download_queue.size
         changed
         notify_observers :state => :download, :name => path, :count => size
-        size = @download_queue.size
         begin
           path = File.expand_path path
-          file = File.new(path, "wb")
           File.open(path, "wb") do |file|
-            file.print open(uri).read
+            cl = HTTPClient.new
+            cl.redirect_uri_callback = ->(uri, res) {
+              res.header['location'][0]
+            }
+            cl.get_content(uri) do |chunk|
+              file.write(chunk)
+            end
           end
-          changed
-          notify_observers :state => :download, :name => path, :count => size
-        rescue OpenURI::HTTPError => e
+        rescue Exception => e
+          @logger.error {"Download error: #{e}"}
           changed
           notify_observers :state => :error, :error => e
-        ensure
-          file.close
         end
       end
       sleep 5
     end
   rescue => e
     changed
+    @logger.error {"Downloader thread: #{e}"}
     notify_observers :state => "error", :error => e
   end
 

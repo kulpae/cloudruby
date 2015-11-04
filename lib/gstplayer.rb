@@ -18,6 +18,7 @@ class GstPlayer
   end
 
   def initialize params = {}
+    @curvature = 4
     params.each { |key, value| send "#{key}=", value }
     unless defined? Gst
       puts "Gstream backend requires gstream gem"
@@ -41,6 +42,10 @@ class GstPlayer
             @pipeline.set_property "audio-sink", sink unless sink.nil?
           when :"buffer-duration", :"buffer-size", :"mute", :"volume"
             @pipeline.set_property key, value
+          when :volume
+            @pipeline.set_property key, logscale(value)
+          when :"volume-curvature"
+            @curvature = value.to_f
           end
         end
       end
@@ -93,14 +98,23 @@ class GstPlayer
     notify_observers :state => :error, :error => err
   end
 
+  #approximation to a logarithmic scale
+  def logscale val, inverse = false
+    val = val.to_f
+    if inverse
+      100 * (val ** (1.0/@curvature))
+    else
+      (val/100)**@curvature
+    end
+  end
+
   def volume= (val)
-    @volume = volume
-    @volume += val
-    @volume = [@volume, 100].min
-    @volume = [@volume, 0].max
-    @pipeline.volume = @volume/100.0
+    vol = volume
+    vol += val
+    vol = [0, [vol, 100].min].max
+    @pipeline.volume = logscale(vol)
     changed
-    notify_observers :state => :status, :type => "Volume", :value => "#{@volume}%"
+    notify_observers :state => :status, :type => "Volume", :value => "#{vol.to_i}%"
   rescue => err
     @error = err
     changed
@@ -108,13 +122,14 @@ class GstPlayer
   end
 
   def volume
-    (@pipeline.get_property("volume") * 100).to_int
+    logval = @pipeline.get_property("volume").to_f
+    logscale logval, true
   end
 
   def mute
     @pipeline.set_property "mute", !@pipeline.get_property("mute")
     changed
-    notify_observers :state => :status, :type => "Volume", :value => "#{muted? ? 0 : @volume}%"
+    notify_observers :state => :status, :type => "Volume", :value => "#{muted? ? 0 : volume}%"
   rescue => err
     @error = err
     changed
@@ -185,7 +200,7 @@ class GstPlayer
       when Gst::MessageType::BUFFERING
         percent = message.parse_buffering
         changed
-        notify_observers :state => :status, :type => "Buffering", :value => "#{percent}%"
+        notify_observers :state => :buffer, :value => percent
       when Gst::MessageType::STATE_CHANGED
         error, state = message.parse_state_changed
         case state

@@ -6,7 +6,7 @@ for playback.
 ## Installation
 
 Install mpg123, ruby 1.9.2+, curses and json_pure with a package manager of your
-destribution.
+distribution.
 
 Then install the required gems.
 
@@ -23,7 +23,7 @@ Without RVM you need to obtain write permissions with sudo:
 ## Usage
 From the terminal start with:
 <pre>
-  cloudruby          # query the latest 100 tracks from soundcloud 
+  cloudruby          # query the latest 100 tracks from soundcloud
   cloudruby $search  # query the latest 100 tracks that match the $search keyword
   
   # play a soundcloud url directly
@@ -44,6 +44,8 @@ Shortcuts:
 <tr><td>Spacebar     </td><td>Toggle playback</td></tr>
 </table>
 
+More detailed information can be found in the `doc` folder.
+
 ## Download
 
 With 'd' or 'D' you can download a downloadable file from soundcloud. The file
@@ -55,8 +57,9 @@ A track is indicated by a **[D]** in the playlist if it's downloadable.
 
 ## Screenshot
 
-![Screenshot showing curses user interface](https://dl.dropboxusercontent.com/u/16104361/images/cloudruby-default.png)
-![Screenshot showing customized curses user interface](https://dl.dropboxusercontent.com/u/16104361/images/cloudruby-custom.png)
+![Screenshot showing curses user interface](https://www.dropbox.com/s/j6uuqf56sgb53tw/cloudruby-default.png?raw=1)
+![Screenshot showing customized curses user interface](https://www.dropbox.com/s/3re0xiqkd2403to/cloudruby-custom.png?raw=1)
+![Screenshot showing customized curses user interface](https://www.dropbox.com/s/kfiu4ve85jsxh04/cloudruby-styling.png?raw=1)
 
 ## Config
 
@@ -85,12 +88,11 @@ Cloudruby can be customized through **~/.cloudruby.json** file.
 There are 7 different 'colors', defined with a foreground and a background color.
 You can use only these colors: "black", "blue", "cyan", "green", "magenta", "red", "yellow", "white".
 
-## Authors
-* Paul Koch [kulpae]
-  http://www.uraniumlane.net/users/kulpae
+## Maintainer
+* [Paul Koch [kulpae]](http://www.uraniumlane.net/users/kulpae)
 
-* Jacco
-  https://github.com/magnific0
+## Contributors 
+* [magnific0](http://www.github.com/magnific0)
 
 
 ## License
