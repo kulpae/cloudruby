@@ -6,7 +6,7 @@ for playback.
 ## Installation
 
 Install mpg123, ruby 1.9.2+, curses and json_pure with a package manager of your
-destribution.
+distribution.
 
 Then install the required gems.
 
@@ -25,7 +25,7 @@ From the terminal start with:
 <pre>
   cloudruby          # query the latest 100 tracks from soundcloud
   cloudruby $search  # query the latest 100 tracks that match the $search keyword
-  
+
   # play a soundcloud url directly
   cloudruby http://soundcloud.com/crassmix/feint-clockwork-hearts-crass
 </pre>
@@ -50,7 +50,7 @@ More detailed information can be found in the `doc` folder.
 
 With 'd' or 'D' you can download a downloadable file from soundcloud. The file
 will be placed inside your download directory specified with `--download_dir` argument
-or inside your `~/.cloudruby.json`. If none of these are given, the current working 
+or inside your `~/.cloudruby.json`. If none of these are given, the current working
 directory is used.
 
 A track is indicated by a **[D]** in the playlist if it's downloadable.
@@ -90,7 +90,7 @@ Read more about styling [here](doc/colors.md)
 ## Maintainer
 * [Paul Koch [kulpae]](http://www.uraniumlane.net/users/kulpae)
 
-## Contributors 
+## Contributors
 * [magnific0](http://www.github.com/magnific0)
 
 

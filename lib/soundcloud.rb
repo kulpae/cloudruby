@@ -2,11 +2,7 @@ require 'cgi'
 require 'open-uri'
 require 'httpclient'
 
-begin
-  require 'json/pure'
-rescue LoadError
-  require 'json'
-end
+require 'json'
 
 class SoundCloud
   include Observable

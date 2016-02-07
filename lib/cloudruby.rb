@@ -1,10 +1,6 @@
 require 'observer'
 require 'logger'
-begin
-  require 'json/pure'
-rescue LoadError
-  require 'json'
-end
+require 'json'
 
 require_relative 'soundcloud.rb'
 require_relative 'mpg123player.rb'
