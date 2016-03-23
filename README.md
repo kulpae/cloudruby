@@ -76,10 +76,7 @@ Cloudruby can be customized through `~/.cloudruby.json` file.
       "playlist": ["green", "black"],
       "playlist_active": ["red", "black"],
       "progress": ["cyan", "black"],
-      "progress_bar": ["blue", "white"],
-      "title": ["cyan"],
-      "artist": ["magenta"],
-      "status": ["red"]
+      "progress_bar": ["blue", "white"]
     }
   }
 }
