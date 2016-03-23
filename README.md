@@ -12,7 +12,7 @@ Then install the required gems.
 
 If you are using RVM:
 <pre>
-  gem install curses json_pure httpclient open-uri
+  gem install curses json_pure httpclient
 </pre>
 
 Without RVM you need to obtain write permissions with sudo:
