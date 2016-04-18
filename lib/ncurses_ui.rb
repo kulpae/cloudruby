@@ -16,8 +16,8 @@ class NCursesUI
     if not @audio_backend
       @audio_backend = Object.new
       def @audio_backend.version
-        "Audio backend: None" 
-      end 
+        "Audio backend: None"
+      end
     end
 
     defaults = {
@@ -264,7 +264,7 @@ class Colors
 
     if Curses.can_change_color?
       palette.each do |name, definition|
-        if $colorCounter >= Curses.colors || name.length == 0 
+        if $colorCounter >= Curses.colors || name.length == 0
           $colorMap[name] = $colorMap[:white]
         elsif $colorMap[name]
           if definition.is_a? Integer
@@ -296,7 +296,7 @@ class Colors
   def self.add(key, fg, bg, attrs=[])
     Curses.init_pair $pairCounter, ncg(fg), ncg(bg)
     $pairMap[key] = Curses.color_pair $pairCounter
-    $attrMap[key] = attrs.map do |a|
+    $attrMap[key] = (attrs || []).map do |a|
       case a.to_sym
       when :bold
         Curses::A_BOLD
@@ -330,7 +330,7 @@ class Colors
       color
     else
       color = -1 unless color
-      color = color.to_sym
+      color = color.to_sym if color.respond_to?(:to_sym)
       $colorMap[color] || -1
     end
   end
@@ -379,7 +379,7 @@ class NProgress
     @winsfg.refresh if sfgw > 0
     @winfg.refresh if fgw > 0
   end
-  
+
   def resize
   end
 
@@ -475,7 +475,7 @@ class NPlaylist
           tl = " #{tl}"
           color = @color
         end
-        tr = "[%6s]" % Nutils.timestr(t["duration"]) 
+        tr = "[%6s]" % Nutils.timestr(t["duration"])
         tr = "[D]#{tr}" if t["downloadable"]
         wr = tr.size
         wl = width - 3- wr
