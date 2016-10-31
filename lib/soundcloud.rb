@@ -20,6 +20,10 @@ class SoundCloud
 
   def load_playlist(search = nil, offset = 0)
     search = "" unless search && !search.empty?
+    # If there are any urls in the search,
+    # Loop over whitespace separated strings in search.
+    #  First make each a separate song/search.
+    #  Later group search terms when quoted?
     if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
       url = "https://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
     else
