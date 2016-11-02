@@ -20,12 +20,6 @@ class SoundCloud
 
   def load_playlist(args = nil, offset = 0)
     args = [] unless args && !args.empty?
-    # If there are any urls in the search,
-    # Loop over whitespace separated strings in search.
-    #  First make each a separate song/search.
-    #  Later group search terms when quoted?
-    print "for each in args:"
-    print args
     @tracks = []
     args.each do |search|
         if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
@@ -46,7 +40,6 @@ class SoundCloud
             t["bpm"] = t["bpm"].nil? ? 0 : t["bpm"].to_i
             t[:error] = "Not streamable" if t["stream_url"].nil?
             t["searchterm"] = search
-            # t
             @tracks << t
         end
     end
