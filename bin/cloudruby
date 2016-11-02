@@ -21,8 +21,18 @@ end
 @query = []
 cfile = File.join Dir.home, ".#{File.basename($0)}.json"
 
+all_args = ARGV
+
+if !$stdin.tty?
+    $stdin.each_line do |line|
+        all_args.push(line)
+    end
+    # Reset to interactive terminal session
+    $stdin.reopen("/dev/tty")
+end
+
 nextsearch = []
-ARGV.each do |a|
+all_args.each do |a|
   if a[0, 2] == "--"
     a = a[2..-1]
     key, value = a.split("=", 2)
