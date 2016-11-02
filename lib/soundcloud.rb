@@ -26,13 +26,8 @@ class SoundCloud
     #  Later group search terms when quoted?
     print "for each in args:"
     print args
-    puts ""
-    for index in 0 ... args.size
-        puts "args[#{index}] = #{args[index].inspect}"
-    end
     @tracks = []
     args.each do |search|
-        puts search
         if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
             url = "https://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
         else
@@ -54,10 +49,6 @@ class SoundCloud
             # t
             @tracks << t
         end
-        puts 'next search'
-    end
-    @tracks.each do |t|
-        puts t["searchterm"]
     end
     changed
     notify_observers :state =>:load, :tracks => @tracks

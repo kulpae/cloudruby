@@ -21,7 +21,6 @@ end
 @query = []
 cfile = File.join Dir.home, ".#{File.basename($0)}.json"
 
-puts "argv:"
 nextsearch = []
 ARGV.each do |a|
   if a[0, 2] == "--"
@@ -44,8 +43,6 @@ if !nextsearch.empty?
     @query.push(nextsearch.join " ")
     nextsearch = []
 end
-puts @query
-puts ":argv"
 
 if @config[:noconfig].nil? && File.readable?(cfile)
   File.open cfile, 'r' do |file|
