@@ -18,26 +18,30 @@ class SoundCloud
     @dthread.run
   end
 
-  def load_playlist(search = nil, offset = 0)
-    search = "" unless search && !search.empty?
-    if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
-      url = "https://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
-    else
-      url = "https://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
-        % [@cid, LIMIT, offset, CGI.escape(search)]
-    end
-    c = open(url) do |io|
-      io.readlines
-    end.join
-    @tracks = JSON.parse c
-    @tracks = [@tracks] if @tracks.is_a? Hash
-    @tracks.map! do |t|
-      t["mpg123url"] = client_url t['stream_url']
-      t["download"] = client_url t['download_url']
-      t["duration"] = t["duration"].nil? ? 0 : t["duration"].to_i/1000
-      t["bpm"] = t["bpm"].nil? ? 0 : t["bpm"].to_i
-      t[:error] = "Not streamable" if t["stream_url"].nil?
-      t
+  def load_playlist(args = nil, offset = 0)
+    args = [] unless args && !args.empty?
+    @tracks = []
+    args.each do |search|
+        if search =~ /\s*http(s)?:\/\/(www.)?soundcloud.com.*/
+            url = "https://api.soundcloud.com/resolve.json?url=%s&client_id=%s" % [CGI.escape(search), @cid]
+        else
+            url = "https://api.soundcloud.com/tracks.json?client_id=%s&filter=streamable&limit=%d&offset=%d&q=%s" \
+                % [@cid, LIMIT, offset, CGI.escape(search)]
+        end
+        c = open(url) do |io|
+            io.readlines
+        end.join
+        trx = JSON.parse c
+        trx = [trx] if trx.is_a? Hash
+        trx.map! do |t|
+            t["mpg123url"] = client_url t['stream_url']
+            t["download"] = client_url t['download_url']
+            t["duration"] = t["duration"].nil? ? 0 : t["duration"].to_i/1000
+            t["bpm"] = t["bpm"].nil? ? 0 : t["bpm"].to_i
+            t[:error] = "Not streamable" if t["stream_url"].nil?
+            t["searchterm"] = search
+            @tracks << t
+        end
     end
     changed
     notify_observers :state =>:load, :tracks => @tracks

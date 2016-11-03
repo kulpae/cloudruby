@@ -21,14 +21,37 @@ end
 @query = []
 cfile = File.join Dir.home, ".#{File.basename($0)}.json"
 
-ARGV.each do |a|
+all_args = ARGV
+
+if !$stdin.tty?
+    $stdin.each_line do |line|
+        all_args.push(line)
+    end
+    # Reset to interactive terminal session
+    $stdin.reopen("/dev/tty")
+end
+
+nextsearch = []
+all_args.each do |a|
   if a[0, 2] == "--"
     a = a[2..-1]
     key, value = a.split("=", 2)
     @config[key.to_sym] = value || true
   else
-    @query << a
+      if a.match(/(\s|http)/)
+          if !nextsearch.empty?
+            @query.push(nextsearch.join " ")
+            nextsearch = []
+          end
+          @query.push(a)
+      else
+          nextsearch.push(a)
+      end
   end
+end
+if !nextsearch.empty?
+    @query.push(nextsearch.join " ")
+    nextsearch = []
 end
 
 if @config[:noconfig].nil? && File.readable?(cfile)
@@ -39,8 +62,6 @@ if @config[:noconfig].nil? && File.readable?(cfile)
 end
 
 @config[:download_dir] ||= Dir.pwd
-
-@query = @query.join " "
 
 c = Cloudruby.new
 c.init @query, @config

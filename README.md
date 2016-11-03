@@ -23,11 +23,24 @@ Without RVM you need to obtain write permissions with sudo:
 ## Usage
 From the terminal start with:
 <pre>
-  cloudruby          # query the latest 100 tracks from soundcloud
-  cloudruby $search  # query the latest 100 tracks that match the $search keyword
+  cloudruby [--config-args] [(search terms|track urls)]
 
-  # play a soundcloud url directly
+  # Examples
+
+  cloudruby          # query the latest 100 tracks from soundcloud
+  cloudruby $search  # query the latest 100 tracks that match the $search keywords
+
+  ## play a soundcloud url directly
   cloudruby http://soundcloud.com/crassmix/feint-clockwork-hearts-crass
+
+  ## create a playlist from arguments (urls and/or grouped search keywords)
+  cloudruby --no-shuffle=true https://soundcloud.com/adapt77/auto-ok-ecophal manicanparty heart "sellorekt thunderbolt" https://soundcloud.com/wearesoundspace/premiere-malbetrieb-ghetto "elektroschneider lenny"
+  > search terms are grouped when quoted or adjacent to urls or quoted strings
+
+  ## create a playlist from a pipe
+  > stdin is also parsed as arguments if piped into the process
+  cloudruby --no-shuffle=true < local-playlist-filename
+  printf "sellorekt iris\nmanicanparty eyes" | cloudruby
 </pre>
 
 Shortcuts:
