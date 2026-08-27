@@ -1,0 +1,4 @@
+nonsource_files[]:
+  # path,summary
+  LICENSE,Define the MIT license governing CloudRuby distribution and reuse.
+  Cargo.lock,Pin the reproducible Rust dependency graph used to build and test CloudRuby.

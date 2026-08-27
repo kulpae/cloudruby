@@ -1,98 +1,109 @@
 # CloudRuby
 
-A soundcloud player written in Ruby with Ncurses for graphical interface and mpg123
-for playback.
+CloudRuby is a terminal music player for modern Linux. It plays audio from local
+folders, individual files, M3U/M3U8 playlists, and HTTP(S) streams such as
+internet-radio and Icecast stations. The interface is written with Ratatui and
+playback uses GStreamer 1.x.
 
-## Installation
+## Requirements
 
-Install mpg123, ruby 1.9.2+, curses and json_pure with a package manager of your
-distribution.
+- Rust 1.92 or newer
+- GStreamer 1.x development files and playback plugins
+- A UTF-8 terminal
 
-Then install the required gems.
+On Debian or Ubuntu:
 
-If you are using RVM:
-<pre>
-  gem install curses json_pure httpclient
-</pre>
-
-Without RVM you need to obtain write permissions with sudo:
-<pre>
-  sudo gem install curses json_pure httpclient open-uri
-</pre>
-
-## Usage
-From the terminal start with:
-<pre>
-  cloudruby          # query the latest 100 tracks from soundcloud
-  cloudruby $search  # query the latest 100 tracks that match the $search keyword
-
-  # play a soundcloud url directly
-  cloudruby http://soundcloud.com/crassmix/feint-clockwork-hearts-crass
-</pre>
-
-Shortcuts:
-<table style="font-family: monospace">
-<tr><th width="160px" align="left">Key</th><th>Description</th></tr>
-<tr><td>ESC | q | Q        </td><td>Quit</td></tr>
-<tr><td>+ | =        </td><td>Increase volume</td></tr>
-<tr><td>- | _        </td><td>Decrease volume</td></tr>
-<tr><td>n | N | Up   </td><td>Next track</td></tr>
-<tr><td>p | P | Down </td><td>Previous track</td></tr>
-<tr><td>m | M        </td><td>Toggle mute</td></tr>
-<tr><td>d | D        </td><td>Download file</td></tr>
-<tr><td>v | V        </td><td>Info dialog</td></tr>
-<tr><td>Spacebar     </td><td>Toggle playback</td></tr>
-</table>
-
-More detailed information can be found in the `doc` folder.
-
-## Download
-
-With 'd' or 'D' you can download a downloadable file from soundcloud. The file
-will be placed inside your download directory specified with `--download_dir` argument
-or inside your `~/.cloudruby.json`. If none of these are given, the current working
-directory is used.
-
-A track is indicated by a **[D]** in the playlist if it's downloadable.
-
-## Screenshots
-
-![Screenshot showing curses user interface](https://www.dropbox.com/s/j6uuqf56sgb53tw/cloudruby-default.png?raw=1)
-![Screenshot showing customized curses user interface](https://www.dropbox.com/s/3re0xiqkd2403to/cloudruby-custom.png?raw=1)
-![Screenshot showing customized curses user interface](https://www.dropbox.com/s/kfiu4ve85jsxh04/cloudruby-styling.png?raw=1)
-
-## Config
-
-Cloudruby can be customized through `~/.cloudruby.json` file.
-
-### Example
-```json
-{
-  "download_dir": "~/music",
-  "audio-backend": "mpg123",
-  "curses": {
-    "colors": {
-      "default": ["white", "black"],
-      "playlist": ["green", "black"],
-      "playlist_active": ["red", "black"],
-      "progress": ["cyan", "black"],
-      "progress_bar": ["blue", "white"],
-      "title": ["cyan"],
-      "artist": ["magenta"],
-      "status": ["red"]
-    }
-  }
-}
+```sh
+sudo apt install build-essential pkg-config libgstreamer1.0-dev \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
 ```
 
-Read more about styling [here](doc/colors.md)
+On Fedora:
 
-## Maintainer
-* [Paul Koch [kulpae]](http://www.uraniumlane.net/users/kulpae)
+```sh
+sudo dnf install gcc pkgconf-pkg-config gstreamer1-devel \
+  gstreamer1-plugins-base gstreamer1-plugins-good \
+  gstreamer1-plugins-bad-free gstreamer1-plugins-ugly-free
+```
 
-## Contributors
-* [magnific0](http://www.github.com/magnific0)
+On Arch Linux:
 
+```sh
+sudo pacman -S base-devel pkgconf gstreamer gst-plugins-base \
+  gst-plugins-good gst-plugins-bad gst-plugins-ugly
+```
+
+## Build and run
+
+```sh
+cargo build --release
+cargo install --path .
+```
+
+Play every supported audio file below a folder:
+
+```sh
+cloudruby ~/Music
+```
+
+Play a playlist in its declared order:
+
+```sh
+cloudruby --no-shuffle favorites.m3u8
+```
+
+Multiple inputs and direct streams can be combined:
+
+```sh
+cloudruby --no-shuffle ~/Music radio.m3u \
+  https://radio.example.org/live.ogg
+```
+
+Directory scanning is recursive and recognizes AAC, FLAC, M4A, MP3, OGA, OGG,
+Opus, WAV, and WebM files. M3U entries may be absolute paths, paths relative to
+the playlist, `file://` URIs, or HTTP(S) URLs. `#EXTINF` titles are displayed when
+present.
+
+## Keyboard controls
+
+| Key | Action |
+| --- | --- |
+| `n`, `N`, Down | Next entry |
+| `p`, `P`, Up | Previous entry |
+| Space | Pause or resume |
+| `+`, `=` | Raise volume |
+| `-`, `_` | Lower volume |
+| `m`, `M` | Toggle mute |
+| `v`, `V` | Toggle source information |
+| `q`, `Q`, Esc | Quit |
+
+## Configuration
+
+CloudRuby reads `$XDG_CONFIG_HOME/cloudruby/config.toml`, normally
+`~/.config/cloudruby/config.toml`:
+
+```toml
+sources = ["~/Music", "/home/me/playlists/radio.m3u8"]
+no_shuffle = true
+
+[ui.colors]
+title = ["cyan"]
+playlist = ["green"]
+playlist_active = ["red"]
+```
+
+Command-line sources replace configured sources for that run. See
+[configuration](doc/configuration.md) and [colors](doc/colors.md) for details.
+
+## Development
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+```
 
 ## License
-see LICENSE.
+
+See [LICENSE](LICENSE).

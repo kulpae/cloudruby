@@ -1,0 +1,35 @@
+[package]
+name = "cloudruby"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.92"
+description = "A terminal player for local music, M3U playlists, and internet radio"
+license = "MIT"
+repository = "https://github.com/kulpae/cloudruby"
+readme = "README.md"
+keywords = ["audio", "m3u", "radio", "tui", "linux"]
+categories = ["command-line-utilities", "multimedia::audio"]
+
+[features]
+default = ["gstreamer-backend"]
+gstreamer-backend = ["dep:gstreamer"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+crossterm = { version = "0.29", features = ["event-stream"] }
+directories = "6"
+futures-util = "0.3"
+gstreamer = { version = "0.25", optional = true }
+rand = "0.9"
+ratatui = "0.29"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
