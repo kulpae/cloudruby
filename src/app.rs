@@ -51,6 +51,12 @@ pub struct App {
     pub position: Duration,
     pub duration: Duration,
     pub buffered_percent: u8,
+    pub spectrum: Vec<f32>,
+    pub spectrum_peaks: Vec<f32>,
+    pub spectrum_active: bool,
+    pub spectrum_activity: f32,
+    pub visualizer_rotation: f32,
+    pub visualizer_frame: u64,
     pub info_visible: bool,
     pub status: Option<(String, Instant)>,
 }
@@ -66,6 +72,12 @@ impl App {
             position: Duration::ZERO,
             duration: Duration::ZERO,
             buffered_percent: 0,
+            spectrum: Vec::new(),
+            spectrum_peaks: Vec::new(),
+            spectrum_active: false,
+            spectrum_activity: 0.0,
+            visualizer_rotation: 0.0,
+            visualizer_frame: 0,
             info_visible: false,
             status: None,
         }
@@ -111,10 +123,61 @@ impl App {
         }
     }
 
+    pub fn update_spectrum(&mut self, bands: &[f32]) {
+        if bands.is_empty() {
+            return;
+        }
+        if self.spectrum.len() != bands.len() {
+            self.spectrum.resize(bands.len(), 0.0);
+            self.spectrum_peaks.resize(bands.len(), 0.0);
+        }
+        let mut activity = 0.0;
+        for ((level, peak), target) in self
+            .spectrum
+            .iter_mut()
+            .zip(&mut self.spectrum_peaks)
+            .zip(bands.iter().copied())
+        {
+            let target = target.clamp(0.0, 1.0);
+            activity += target;
+            let response = if target > *level { 0.82 } else { 0.24 };
+            *level += (target - *level) * response;
+            *peak = peak.max(*level);
+        }
+        activity /= bands.len() as f32;
+        self.spectrum_activity += (activity - self.spectrum_activity) * 0.32;
+        self.spectrum_active = true;
+    }
+
+    pub fn animate_spectrum(&mut self) {
+        self.visualizer_frame = self.visualizer_frame.wrapping_add(1);
+        let speed = if self.playback == PlaybackState::Playing {
+            0.012
+        } else {
+            0.003
+        };
+        // Keep this unwrapped: reducing at TAU can cause a visible boundary
+        // snap on terminals that redraw between the two frames.
+        self.visualizer_rotation += speed + self.spectrum_activity * 0.14;
+        for (level, peak) in self.spectrum.iter_mut().zip(&mut self.spectrum_peaks) {
+            *level *= if self.playback == PlaybackState::Playing {
+                0.975
+            } else {
+                0.88
+            };
+            *peak = (*peak - 0.018).max(*level);
+        }
+    }
+
     fn reset_progress(&mut self) {
         self.position = Duration::ZERO;
         self.duration = Duration::ZERO;
         self.buffered_percent = 0;
+        self.spectrum.fill(0.0);
+        self.spectrum_peaks.fill(0.0);
+        self.spectrum_active = false;
+        self.spectrum_activity = 0.0;
+        self.visualizer_rotation = 0.0;
     }
 }
 
@@ -170,5 +233,20 @@ mod tests {
         assert_eq!(app.volume, 1.0);
         app.change_volume(-2.0);
         assert_eq!(app.volume, 0.0);
+    }
+
+    #[test]
+    fn spectrum_uses_fast_attack_and_peak_decay() {
+        let mut app = App::new(vec![]);
+        app.playback = PlaybackState::Playing;
+        app.update_spectrum(&[1.0, 0.5]);
+        assert!(app.spectrum[0] > 0.8);
+        assert_eq!(app.spectrum_peaks[0], app.spectrum[0]);
+        let peak = app.spectrum_peaks[0];
+        app.update_spectrum(&[0.0, 0.0]);
+        app.animate_spectrum();
+        assert!(app.spectrum[0] < 0.8);
+        assert!(app.spectrum_peaks[0] < peak);
+        assert!(app.spectrum_active);
     }
 }

@@ -8,6 +8,7 @@ pub enum PlayerEvent {
     Error(String),
     Buffering(u8),
     State(PlayerState),
+    Spectrum(Vec<f32>),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -55,6 +56,17 @@ mod gst_backend {
         pub fn new(events: mpsc::UnboundedSender<PlayerEvent>) -> anyhow::Result<Arc<Self>> {
             gst::init()?;
             let playbin = gst::ElementFactory::make("playbin").build()?;
+            if let Ok(spectrum) = gst::ElementFactory::make("spectrum")
+                .property("bands", 128_u32)
+                .property("threshold", -80_i32)
+                .property("interval", 25_000_000_u64)
+                .property("post-messages", true)
+                .property("message-magnitude", true)
+                .property("message-phase", false)
+                .build()
+            {
+                playbin.set_property("audio-filter", &spectrum);
+            }
             let bus = playbin
                 .bus()
                 .ok_or_else(|| anyhow::anyhow!("GStreamer playbin has no bus"))?;
@@ -93,6 +105,24 @@ mod gst_backend {
                                     _ => PlayerState::Stopped,
                                 };
                                 let _ = events.send(PlayerEvent::State(state));
+                            }
+                            MessageView::Element(element) => {
+                                let Some(structure) = element.structure() else {
+                                    continue;
+                                };
+                                if structure.name() != "spectrum" {
+                                    continue;
+                                }
+                                if let Ok(magnitudes) = structure.get::<gst::List>("magnitude") {
+                                    let bands = magnitudes
+                                        .iter()
+                                        .filter_map(|value| value.get::<f32>().ok())
+                                        .map(normalize_magnitude)
+                                        .collect::<Vec<_>>();
+                                    if !bands.is_empty() {
+                                        let _ = events.send(PlayerEvent::Spectrum(bands));
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -161,6 +191,22 @@ mod gst_backend {
     }
 
     pub use GstreamerPlayer as DefaultPlayer;
+
+    fn normalize_magnitude(db: f32) -> f32 {
+        ((db + 80.0) / 80.0).clamp(0.0, 1.0).powf(0.55)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::normalize_magnitude;
+
+        #[test]
+        fn normalizes_spectrum_db_with_reactive_curve() {
+            assert_eq!(normalize_magnitude(-80.0), 0.0);
+            assert_eq!(normalize_magnitude(0.0), 1.0);
+            assert!(normalize_magnitude(-40.0) > 0.5);
+        }
+    }
 }
 
 #[cfg(feature = "gstreamer-backend")]

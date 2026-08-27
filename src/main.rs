@@ -95,7 +95,7 @@ async fn run_tui(
     let mut terminal = ratatui::init();
     let result = async {
         let mut input = EventStream::new();
-        let mut tick = tokio::time::interval(Duration::from_millis(100));
+        let mut tick = tokio::time::interval(Duration::from_millis(33));
         loop {
             terminal.draw(|frame| ui::render(frame, &app, &config.ui))?;
             tokio::select! {
@@ -103,6 +103,7 @@ async fn run_tui(
                     let snapshot = player.snapshot();
                     app.position = snapshot.position;
                     if !snapshot.duration.is_zero() { app.duration = snapshot.duration; }
+                    app.animate_spectrum();
                     app.expire_status();
                 }
                 event = input.next() => {
@@ -135,6 +136,7 @@ async fn run_tui(
                         PlayerState::Paused => PlaybackState::Paused,
                         PlayerState::Stopped => PlaybackState::Stopped,
                     },
+                    Some(PlayerEvent::Spectrum(bands)) => app.update_spectrum(&bands),
                     None => {}
                 },
                 _ = tokio::signal::ctrl_c() => break,

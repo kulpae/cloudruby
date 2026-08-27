@@ -5,6 +5,12 @@ folders, individual files, M3U/M3U8 playlists, and HTTP(S) streams such as
 internet-radio and Icecast stations. The interface is written with Ratatui and
 playback uses GStreamer 1.x.
 
+On wide terminals, the right pane shows a live, rotating radial FFT rendered
+with high-resolution Unicode Braille cells. Frequency bands rise outward from
+the center, rotation accelerates with audio activity, and a neon gradient with
+peak glow gives it a classic Winamp-style feel. Press `v` to show or hide track
+details as an overlay.
+
 ## Requirements
 
 - Rust 1.92 or newer
@@ -88,9 +94,12 @@ sources = ["~/Music", "/home/me/playlists/radio.m3u8"]
 no_shuffle = true
 
 [ui.colors]
-title = ["cyan"]
-playlist = ["green"]
-playlist_active = ["red"]
+title = { fg = "#88c0d0", modifiers = ["bold"] }
+playlist_active = { fg = "black", bg = "#88c0d0", modifiers = ["bold"] }
+progress_fill = { fg = "#a3be8c", bg = "ansi:236" }
+visualizer_low = { fg = "#2f81a8" }
+visualizer_mid = { fg = "#88c0d0" }
+visualizer_high = { fg = "#b48ead" }
 ```
 
 Command-line sources replace configured sources for that run. See

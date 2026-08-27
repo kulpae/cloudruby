@@ -16,10 +16,39 @@ pub struct Config {
     pub ui: UiConfig,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct UiConfig {
-    pub colors: HashMap<String, Vec<String>>,
+    pub colors: HashMap<String, StyleConfig>,
+    pub border_type: String,
+    pub unicode: bool,
+    pub visualizer_sensitivity: f32,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            colors: HashMap::new(),
+            border_type: "rounded".into(),
+            unicode: true,
+            visualizer_sensitivity: 1.25,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum StyleConfig {
+    Detailed(StyleSpec),
+    Legacy(Vec<String>),
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct StyleSpec {
+    pub fg: Option<String>,
+    pub bg: Option<String>,
+    pub modifiers: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -112,5 +141,30 @@ mod tests {
         let actual = Config::load_path(&path).unwrap();
         assert_eq!(actual.sources, expected.sources);
         assert!(actual.no_shuffle);
+    }
+
+    #[test]
+    fn accepts_legacy_and_detailed_styles() {
+        let config: Config = toml::from_str(
+            r##"
+            [ui]
+            border_type = "double"
+            unicode = false
+            visualizer_sensitivity = 1.5
+
+            [ui.colors]
+            title = ["cyan", "black", "bold"]
+            playlist_active = { fg = "#ff8800", bg = "ansi:236", modifiers = ["bold"] }
+            "##,
+        )
+        .unwrap();
+        assert!(matches!(config.ui.colors["title"], StyleConfig::Legacy(_)));
+        assert!(matches!(
+            config.ui.colors["playlist_active"],
+            StyleConfig::Detailed(_)
+        ));
+        assert_eq!(config.ui.border_type, "double");
+        assert!(!config.ui.unicode);
+        assert_eq!(config.ui.visualizer_sensitivity, 1.5);
     }
 }
