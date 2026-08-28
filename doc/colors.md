@@ -24,6 +24,8 @@ visualizer_high = { fg = "#b48ead" }
 visualizer_peak = { fg = "#ebcb8b", modifiers = ["bold"] }
 visualizer_hot = { fg = "#bf616a", modifiers = ["bold"] }
 visualizer_background = { bg = "#050e1c" }
+visualizer_stars = { fg = "#4b91cd", modifiers = ["dim"] }
+visualizer_star_trail = { fg = "#14375f", modifiers = ["dim"] }
 playlist = { fg = "#d8dee9" }
 playlist_active = { fg = "black", bg = "#88c0d0", modifiers = ["bold"] }
 playlist_index = { fg = "ansi:243" }

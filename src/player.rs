@@ -8,7 +8,14 @@ pub enum PlayerEvent {
     Error(String),
     Buffering(u8),
     State(PlayerState),
-    Spectrum(Vec<f32>),
+    Spectrum(SpectrumFrame),
+}
+
+#[derive(Clone, Debug)]
+pub struct SpectrumFrame {
+    pub bands: Vec<f32>,
+    pub running_time: Duration,
+    pub duration: Duration,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -120,7 +127,23 @@ mod gst_backend {
                                         .map(normalize_magnitude)
                                         .collect::<Vec<_>>();
                                     if !bands.is_empty() {
-                                        let _ = events.send(PlayerEvent::Spectrum(bands));
+                                        let running_time = structure
+                                            .get::<gst::ClockTime>("running-time")
+                                            .ok()
+                                            .map_or(Duration::ZERO, |value| {
+                                                Duration::from_nanos(value.nseconds())
+                                            });
+                                        let duration = structure
+                                            .get::<gst::ClockTime>("duration")
+                                            .ok()
+                                            .map_or(Duration::from_millis(25), |value| {
+                                                Duration::from_nanos(value.nseconds())
+                                            });
+                                        let _ = events.send(PlayerEvent::Spectrum(SpectrumFrame {
+                                            bands,
+                                            running_time,
+                                            duration,
+                                        }));
                                     }
                                 }
                             }

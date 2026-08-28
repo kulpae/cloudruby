@@ -468,6 +468,8 @@ fn render_radial_braille(frame: &mut Frame<'_>, area: Rect, app: &App, config: &
     let mut bits = vec![0_u32; cells];
     let mut peak_cells = vec![false; cells];
     let mut bands = vec![0_usize; cells];
+    let mut star_cells = vec![false; cells];
+    let mut trail_cells = vec![false; cells];
     let cx = (width as f32 - 1.0) / 2.0;
     let cy = (height as f32 - 1.0) / 2.0;
     let radius = (width.min(height) as f32 * 0.46).max(2.0);
@@ -486,7 +488,64 @@ fn render_radial_braille(frame: &mut Frame<'_>, area: Rect, app: &App, config: &
             continue;
         }
         let angle = seed.cos() * std::f32::consts::PI + phase * 0.02;
-        let r = radius * (0.35 + radius_ratio * 0.58);
+        let r = radius * (0.90 + radius_ratio * 0.14);
+        for (scale, is_core) in [(0.80, false), (0.90, false), (1.0, true)] {
+            let sx = (cx + angle.cos() * r * scale).round() as i32 / 2;
+            let sy = (cy + angle.sin() * r * scale).round() as i32 / 4;
+            if sx >= 0
+                && sy >= 0
+                && (sx as usize) < usize::from(area.width)
+                && (sy as usize) < usize::from(area.height)
+            {
+                let index = sy as usize * usize::from(area.width) + sx as usize;
+                if is_core {
+                    star_cells[index] = true;
+                    let growth = (1.0 + twinkle * 2.0) as i32;
+                    for dy in -growth..=growth {
+                        for dx in -growth..=growth {
+                            if dx * dx + dy * dy <= growth * growth {
+                                plot_braille(
+                                    &mut bits,
+                                    &mut peak_cells,
+                                    &mut bands,
+                                    usize::from(area.width),
+                                    sx * 2 + dx,
+                                    sy * 4 + dy,
+                                    false,
+                                    0,
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    trail_cells[index] = true;
+                }
+            }
+        }
+        /*
+        let sx = (cx + angle.cos() * r).round() as i32 / 2;
+        let sy = (cy + angle.sin() * r).round() as i32 / 4;
+        if sx >= 0
+            && sy >= 0
+            && (sx as usize) < usize::from(area.width)
+            && (sy as usize) < usize::from(area.height)
+        {
+            star_cells[sy as usize * usize::from(area.width) + sx as usize] = true;
+            let star_style = themed(
+                config,
+                "visualizer_stars",
+                Style::new()
+                    .fg(Color::Rgb(75, 145, 205))
+                    .add_modifier(Modifier::DIM),
+            );
+            frame.buffer_mut().set_string(
+                area.x + sx as u16,
+                area.y + sy as u16,
+                if twinkle > 0.72 { "✦" } else { "·" },
+                star_style,
+            );
+        }
+        */
         plot_braille(
             &mut bits,
             &mut peak_cells,
@@ -558,6 +617,41 @@ fn render_radial_braille(frame: &mut Frame<'_>, area: Rect, app: &App, config: &
                     glyph.to_string(),
                     style,
                 );
+            }
+        }
+    }
+    let star_style = themed(
+        config,
+        "visualizer_stars",
+        Style::new()
+            .fg(Color::Rgb(75, 145, 205))
+            .add_modifier(Modifier::DIM),
+    );
+    let trail_style = themed(
+        config,
+        "visualizer_star_trail",
+        Style::new()
+            .fg(Color::Rgb(20, 55, 95))
+            .add_modifier(Modifier::DIM),
+    );
+    for y in 0..usize::from(area.height) {
+        for x in 0..usize::from(area.width) {
+            let index = y * usize::from(area.width) + x;
+            if (trail_cells[index] || star_cells[index]) && !peak_cells[index] {
+                let style = if star_cells[index] {
+                    star_style
+                } else {
+                    trail_style
+                };
+                let glyph = char::from_u32(0x2800 + bits[index]).unwrap_or(' ');
+                if glyph != ' ' {
+                    frame.buffer_mut().set_string(
+                        area.x + x as u16,
+                        area.y + y as u16,
+                        glyph.to_string(),
+                        style,
+                    );
+                }
             }
         }
     }

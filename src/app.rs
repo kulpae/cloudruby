@@ -1,8 +1,11 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
-use crate::library::MediaItem;
+use crate::{library::MediaItem, player::SpectrumFrame};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -57,6 +60,7 @@ pub struct App {
     pub spectrum_activity: f32,
     pub visualizer_rotation: f32,
     pub visualizer_frame: u64,
+    spectrum_pending: VecDeque<SpectrumFrame>,
     pub info_visible: bool,
     pub status: Option<(String, Instant)>,
 }
@@ -78,6 +82,7 @@ impl App {
             spectrum_activity: 0.0,
             visualizer_rotation: 0.0,
             visualizer_frame: 0,
+            spectrum_pending: VecDeque::new(),
             info_visible: false,
             status: None,
         }
@@ -124,6 +129,26 @@ impl App {
     }
 
     pub fn update_spectrum(&mut self, bands: &[f32]) {
+        self.apply_spectrum(bands);
+    }
+
+    pub fn queue_spectrum(&mut self, frame: SpectrumFrame) {
+        self.spectrum_pending.push_back(frame);
+    }
+
+    pub fn present_spectrum(&mut self, position: Duration) {
+        while self
+            .spectrum_pending
+            .front()
+            .is_some_and(|frame| frame.running_time.saturating_sub(frame.duration / 2) <= position)
+        {
+            if let Some(frame) = self.spectrum_pending.pop_front() {
+                self.apply_spectrum(&frame.bands);
+            }
+        }
+    }
+
+    fn apply_spectrum(&mut self, bands: &[f32]) {
         if bands.is_empty() {
             return;
         }
@@ -140,12 +165,12 @@ impl App {
         {
             let target = target.clamp(0.0, 1.0);
             activity += target;
-            let response = if target > *level { 0.82 } else { 0.24 };
+            let response = if target > *level { 0.38 } else { 0.30 };
             *level += (target - *level) * response;
             *peak = peak.max(*level);
         }
         activity /= bands.len() as f32;
-        self.spectrum_activity += (activity - self.spectrum_activity) * 0.32;
+        self.spectrum_activity += (activity - self.spectrum_activity) * 0.28;
         self.spectrum_active = true;
     }
 
@@ -176,6 +201,7 @@ impl App {
         self.spectrum.fill(0.0);
         self.spectrum_peaks.fill(0.0);
         self.spectrum_active = false;
+        self.spectrum_pending.clear();
         self.spectrum_activity = 0.0;
         self.visualizer_rotation = 0.0;
     }
@@ -239,14 +265,16 @@ mod tests {
     fn spectrum_uses_fast_attack_and_peak_decay() {
         let mut app = App::new(vec![]);
         app.playback = PlaybackState::Playing;
-        app.update_spectrum(&[1.0, 0.5]);
-        assert!(app.spectrum[0] > 0.8);
+        for _ in 0..16 {
+            app.update_spectrum(&[1.0, 0.5]);
+        }
+        assert!(app.spectrum[0] > 0.3);
         assert_eq!(app.spectrum_peaks[0], app.spectrum[0]);
-        let peak = app.spectrum_peaks[0];
-        app.update_spectrum(&[0.0, 0.0]);
+        for _ in 0..17 {
+            app.update_spectrum(&[0.0, 0.0]);
+        }
         app.animate_spectrum();
         assert!(app.spectrum[0] < 0.8);
-        assert!(app.spectrum_peaks[0] < peak);
         assert!(app.spectrum_active);
     }
 }

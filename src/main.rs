@@ -103,6 +103,7 @@ async fn run_tui(
                     let snapshot = player.snapshot();
                     app.position = snapshot.position;
                     if !snapshot.duration.is_zero() { app.duration = snapshot.duration; }
+                    app.present_spectrum(snapshot.position);
                     app.animate_spectrum();
                     app.expire_status();
                 }
@@ -136,7 +137,7 @@ async fn run_tui(
                         PlayerState::Paused => PlaybackState::Paused,
                         PlayerState::Stopped => PlaybackState::Stopped,
                     },
-                    Some(PlayerEvent::Spectrum(bands)) => app.update_spectrum(&bands),
+                    Some(PlayerEvent::Spectrum(frame)) => app.queue_spectrum(frame),
                     None => {}
                 },
                 _ = tokio::signal::ctrl_c() => break,

@@ -1,16 +1,11 @@
 # CloudRuby
 
-CloudRuby is a terminal music player for modern Linux. It plays audio from local
+CloudRuby is a terminal music player. It plays audio from local
 folders, individual files, M3U/M3U8 playlists, and HTTP(S) streams such as
 internet-radio and Icecast stations. The interface is written with Ratatui and
 playback uses GStreamer 1.x.
 
-On wide terminals, the right pane shows a live, rotating radial FFT rendered
-with high-resolution Unicode Braille cells. Frequency bands rise outward from
-the center, rotation accelerates with audio activity, and a neon gradient with
-peak glow gives it a classic Winamp-style feel. Press `v` to show or hide track
-details as an overlay.
-
+On wide terminals, the right pane shows a live, rotating radial FFT visualization.
 ## Requirements
 
 - Rust 1.92 or newer
