@@ -1,6 +1,6 @@
 [package]
 name = "cloudruby"
-version = "0.2.2"
+version = "2.0.0"
 edition = "2024"
 rust-version = "1.92"
 description = "A terminal player for local music, M3U playlists, and internet radio"
