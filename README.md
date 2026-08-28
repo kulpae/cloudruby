@@ -61,6 +61,12 @@ cloudruby --no-shuffle ~/Music radio.m3u \
   https://radio.example.org/live.ogg
 ```
 
+Sources can also be supplied one per line through standard input:
+
+```sh
+printf '%s\n' ~/Music/favorite.mp3 https://radio.example.org/live.ogg | cloudruby --no-shuffle
+```
+
 Directory scanning is recursive and recognizes AAC, FLAC, M4A, MP3, OGA, OGG,
 Opus, WAV, and WebM files. M3U entries may be absolute paths, paths relative to
 the playlist, `file://` URIs, or HTTP(S) URLs. `#EXTINF` titles are displayed when
@@ -99,6 +105,9 @@ visualizer_high = { fg = "#b48ead" }
 
 Command-line sources replace configured sources for that run. See
 [configuration](doc/configuration.md) and [colors](doc/colors.md) for details.
+
+`--no-shuffle` also accepts the legacy forms `--no_shuffle` and
+`--no-shuffle=true`.
 
 ## Screenshots
 

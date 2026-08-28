@@ -1,4 +1,9 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    io::{self, IsTerminal, Read},
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Context;
 use clap::Parser;
@@ -22,7 +27,15 @@ struct Cli {
     #[arg(long)]
     config: Option<PathBuf>,
     /// Preserve source and playlist order
-    #[arg(long, alias = "no_shuffle")]
+    #[arg(
+        long,
+        alias = "no_shuffle",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        default_value = "false",
+        value_parser = clap::value_parser!(bool),
+    )]
     no_shuffle: bool,
     /// Write the effective configuration to the XDG path and exit
     #[arg(long)]
@@ -44,8 +57,10 @@ async fn main() -> anyhow::Result<()> {
     } else {
         Config::load(cli.config.as_deref())?
     };
-    if !cli.sources.is_empty() {
-        config.sources = cli.sources;
+    let mut sources = cli.sources;
+    sources.extend(read_stdin_sources()?);
+    if !sources.is_empty() {
+        config.sources = sources;
     }
     if cli.no_shuffle {
         config.no_shuffle = true;
@@ -76,6 +91,25 @@ async fn main() -> anyhow::Result<()> {
     let mut app = App::new(tracks);
     play_selected(&player, &mut app)?;
     run_tui(player, player_rx, app, config).await
+}
+
+fn read_stdin_sources() -> anyhow::Result<Vec<String>> {
+    if io::stdin().is_terminal() {
+        return Ok(Vec::new());
+    }
+
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+    Ok(parse_stdin_sources(&input))
+}
+
+fn parse_stdin_sources(input: &str) -> Vec<String> {
+    input
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 fn play_selected(player: &Arc<dyn AudioPlayer>, app: &mut App) -> anyhow::Result<()> {
@@ -192,4 +226,14 @@ fn handle_action(
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn stdin_sources_are_trimmed_and_blank_lines_are_ignored() {
+        let sources = "  first.mp3\n\nhttps://radio.example/live.ogg  \n";
+        let actual = super::parse_stdin_sources(sources);
+        assert_eq!(actual, ["first.mp3", "https://radio.example/live.ogg"]);
+    }
 }
