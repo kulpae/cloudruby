@@ -83,8 +83,10 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
 
 fn render_compact(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
     let title = app
-        .current_track()
-        .map_or("No media", |item| item.title.as_str());
+        .stream_title
+        .as_deref()
+        .or_else(|| app.current_track().map(|item| item.title.as_str()))
+        .unwrap_or("No media");
     let symbol = playback_symbol(app.playback, config.unicode);
     frame.render_widget(
         Paragraph::new(vec![
@@ -116,7 +118,11 @@ fn render_source_input(frame: &mut Frame<'_>, app: &App, area: Rect, config: &Ui
 
 fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
     let item = app.current_track();
-    let title = item.map_or("Nothing selected", |item| item.title.as_str());
+    let title = app
+        .stream_title
+        .as_deref()
+        .or_else(|| item.map(|item| item.title.as_str()))
+        .unwrap_or("Nothing selected");
     let symbol = playback_symbol(app.playback, config.unicode);
     let volume = format!(
         " VOL {:>3}%{} ",
@@ -784,8 +790,20 @@ fn render_details(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfi
         detail_line(
             config,
             "TITLE",
-            item.map_or("—", |item| item.title.as_str()),
+            app.stream_title
+                .as_deref()
+                .or_else(|| item.map(|item| item.title.as_str()))
+                .unwrap_or("—"),
         ),
+        if item.is_some_and(|item| item.kind == MediaKind::Stream) {
+            detail_line(
+                config,
+                "STATION",
+                item.map_or("—", |item| item.title.as_str()),
+            )
+        } else {
+            Line::from("")
+        },
         Line::from(""),
         detail_line(config, "TYPE", kind),
         detail_line(
@@ -843,11 +861,10 @@ fn render_status(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig
     let (symbol, message) = if app.loading {
         loading_message = format!("Loading sources… {} tracks queued", app.loaded_count);
         ("…", loading_message.as_str())
+    } else if let Some((message, _)) = app.status.as_ref() {
+        ("◆", message.as_str())
     } else {
-        app.status.as_ref().map_or_else(
-            || ("●", playback_name(app.playback)),
-            |(message, _)| ("◆", message.as_str()),
-        )
+        ("", "")
     };
     frame.render_widget(
         Paragraph::new(Line::from(vec![

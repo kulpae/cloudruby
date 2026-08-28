@@ -9,6 +9,7 @@ pub enum PlayerEvent {
     Buffering(u8),
     State(PlayerState),
     StreamStarted(u64),
+    StreamTitle(u64, String),
     Spectrum(SpectrumFrame),
 }
 
@@ -97,6 +98,17 @@ mod gst_backend {
                                 spectrum_generation = spectrum_generation.wrapping_add(1);
                                 let _ =
                                     events.send(PlayerEvent::StreamStarted(spectrum_generation));
+                            }
+                            MessageView::Tag(tag) => {
+                                if let Some(title) = tag.tags().get::<gst::tags::Title>() {
+                                    let title = title.get().trim();
+                                    if !title.is_empty() {
+                                        let _ = events.send(PlayerEvent::StreamTitle(
+                                            spectrum_generation,
+                                            title.to_owned(),
+                                        ));
+                                    }
+                                }
                             }
                             MessageView::Eos(..) => {
                                 let _ = events.send(PlayerEvent::EndOfStream);

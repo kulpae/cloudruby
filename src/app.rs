@@ -68,6 +68,7 @@ pub struct App {
     spectrum_pending: VecDeque<SpectrumFrame>,
     spectrum_generation: u64,
     pub info_visible: bool,
+    pub stream_title: Option<String>,
     pub status: Option<(String, Instant)>,
     pub loading: bool,
     pub loaded_count: usize,
@@ -97,6 +98,7 @@ impl App {
             spectrum_pending: VecDeque::new(),
             spectrum_generation: 0,
             info_visible: false,
+            stream_title: None,
             status: None,
             loading: false,
             loaded_count,
@@ -241,6 +243,13 @@ impl App {
         self.spectrum_peaks.fill(0.0);
         self.spectrum_active = false;
         self.spectrum_activity = 0.0;
+        self.stream_title = None;
+    }
+
+    pub fn update_stream_title(&mut self, generation: u64, title: String) {
+        if generation == self.spectrum_generation {
+            self.stream_title = Some(title);
+        }
     }
 
     pub fn present_spectrum(&mut self, position: Duration) {
@@ -311,6 +320,7 @@ impl App {
         self.spectrum_pending.clear();
         self.spectrum_activity = 0.0;
         self.visualizer_rotation = 0.0;
+        self.stream_title = None;
     }
 }
 

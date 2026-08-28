@@ -196,18 +196,27 @@ async fn run_tui(
                             play_selected(&player, &mut app)?;
                         }
                     }
-                    Some(PlayerEvent::Error(message)) => app.notify(format!("Playback error: {message}")),
+                    Some(PlayerEvent::Error(message)) => {
+                        app.playback = PlaybackState::Stopped;
+                        app.notify(format!("Playback error: {message}"));
+                    }
                     Some(PlayerEvent::Buffering(value)) => {
                         app.buffered_percent = value;
                         app.playback = if value < 100 { PlaybackState::Buffering } else { PlaybackState::Playing };
                     }
-                    Some(PlayerEvent::State(state)) => app.playback = match state {
-                        PlayerState::Playing => PlaybackState::Playing,
-                        PlayerState::Paused => PlaybackState::Paused,
-                        PlayerState::Stopped => PlaybackState::Stopped,
-                    },
+                    Some(PlayerEvent::State(state)) => {
+                        app.playback = match state {
+                            PlayerState::Playing => PlaybackState::Playing,
+                            PlayerState::Paused => PlaybackState::Paused,
+                            PlayerState::Stopped => PlaybackState::Stopped,
+                        };
+                        app.notify(playback_message(app.playback));
+                    }
                     Some(PlayerEvent::StreamStarted(generation)) => {
                         app.start_spectrum_stream(generation);
+                    }
+                    Some(PlayerEvent::StreamTitle(generation, title)) => {
+                        app.update_stream_title(generation, title);
                     }
                     Some(PlayerEvent::Spectrum(frame)) => app.queue_spectrum(frame),
                     None => {}
@@ -272,15 +281,29 @@ fn handle_action(
             app.notify(if app.muted { "Muted" } else { "Unmuted" });
         }
         Action::ToggleInfo => app.info_visible = !app.info_visible,
-        Action::TogglePause => {
-            if app.playback == PlaybackState::Paused {
-                player.resume()?;
-                app.playback = PlaybackState::Playing;
-            } else {
-                player.pause()?;
-                app.playback = PlaybackState::Paused;
-            }
-        }
+        Action::TogglePause => match app.playback {
+            PlaybackState::Paused => match player.resume() {
+                Ok(()) => {
+                    app.playback = PlaybackState::Playing;
+                    app.notify("Playing");
+                }
+                Err(error) => {
+                    app.playback = PlaybackState::Stopped;
+                    app.notify(format!("Playback unavailable: {error}"));
+                }
+            },
+            PlaybackState::Playing | PlaybackState::Buffering => match player.pause() {
+                Ok(()) => {
+                    app.playback = PlaybackState::Paused;
+                    app.notify("Paused");
+                }
+                Err(error) => {
+                    app.playback = PlaybackState::Stopped;
+                    app.notify(format!("Playback unavailable: {error}"));
+                }
+            },
+            PlaybackState::Stopped => app.notify("Nothing is playing"),
+        },
         Action::ToggleShuffle => {
             if app.loading {
                 app.notify("Shuffle is available after loading finishes");
@@ -291,6 +314,15 @@ fn handle_action(
         Action::AddSource => app.begin_add_source(),
     }
     Ok(false)
+}
+
+fn playback_message(state: PlaybackState) -> &'static str {
+    match state {
+        PlaybackState::Playing => "Playing",
+        PlaybackState::Paused => "Paused",
+        PlaybackState::Stopped => "Stopped",
+        PlaybackState::Buffering => "Buffering",
+    }
 }
 
 #[cfg(test)]
