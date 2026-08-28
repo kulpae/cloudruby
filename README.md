@@ -100,6 +100,15 @@ visualizer_high = { fg = "#b48ead" }
 Command-line sources replace configured sources for that run. See
 [configuration](doc/configuration.md) and [colors](doc/colors.md) for details.
 
+## Screenshots
+
+
+
+![Terminal: Konsole, Font: Hack 14pt](doc/anim_1.gif?raw=true "Figure 1")
+
+![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Figure 2")
+
+
 ## Development
 
 ```sh
