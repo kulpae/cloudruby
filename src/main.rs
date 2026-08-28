@@ -62,7 +62,8 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    let mut tracks = load_sources(&config.sources)?;
+    let sources = config.sources.clone();
+    let mut tracks = tokio::task::spawn_blocking(move || load_sources(&sources)).await??;
     if tracks.is_empty() {
         anyhow::bail!("no supported audio entries found");
     }

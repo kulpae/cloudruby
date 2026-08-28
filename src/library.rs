@@ -44,6 +44,13 @@ pub enum LibraryError {
         path: PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to fetch playlist {url}: {source}")]
+    Fetch { url: String, source: reqwest::Error },
+    #[error("playlist request failed for {url}: HTTP {status}")]
+    HttpStatus {
+        url: String,
+        status: reqwest::StatusCode,
+    },
     #[error("cannot convert path to a file URI: {0}")]
     InvalidPath(PathBuf),
 }
@@ -61,6 +68,10 @@ pub fn load_sources(sources: &[String]) -> Result<Vec<MediaItem>, LibraryError> 
 fn load_source(source: &str, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
     if let Ok(url) = Url::parse(source) {
         if matches!(url.scheme(), "http" | "https" | "file") {
+            if matches!(url.scheme(), "http" | "https") && is_playlist_url(&url) {
+                parse_remote_playlist(url, items)?;
+                return Ok(());
+            }
             items.push(item_from_url(url, None)?);
             return Ok(());
         }
@@ -112,6 +123,56 @@ fn parse_playlist(path: &Path, items: &mut Vec<MediaItem>) -> Result<(), Library
         source,
     })?;
     let base = path.parent().unwrap_or_else(|| Path::new("."));
+    parse_playlist_content(&content, items, |line| {
+        let expanded = expand_home(line);
+        let entry = expanded.as_path();
+        if entry.is_absolute() {
+            Ok(Url::from_file_path(entry)
+                .map_err(|()| LibraryError::InvalidPath(entry.to_owned()))?)
+        } else {
+            let resolved = base.join(entry);
+            Ok(Url::from_file_path(resolved)
+                .map_err(|()| LibraryError::InvalidPath(base.join(entry)))?)
+        }
+    })
+}
+
+fn parse_remote_playlist(url: Url, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
+    let response = reqwest::blocking::get(url.as_str()).map_err(|source| LibraryError::Fetch {
+        url: url.to_string(),
+        source,
+    })?;
+    let response = response.error_for_status().map_err(|source| {
+        if let Some(status) = source.status() {
+            LibraryError::HttpStatus {
+                url: url.to_string(),
+                status,
+            }
+        } else {
+            LibraryError::Fetch {
+                url: url.to_string(),
+                source,
+            }
+        }
+    })?;
+    let content = response.text().map_err(|source| LibraryError::Fetch {
+        url: url.to_string(),
+        source,
+    })?;
+    parse_playlist_content(&content, items, |line| {
+        url.join(line)
+            .map_err(|source| LibraryError::Unsupported(source.to_string()))
+    })
+}
+
+fn parse_playlist_content<F>(
+    content: &str,
+    items: &mut Vec<MediaItem>,
+    resolve_entry: F,
+) -> Result<(), LibraryError>
+where
+    F: Fn(&str) -> Result<Url, LibraryError>,
+{
     let mut next_title = None;
     for raw_line in content.lines() {
         let line = raw_line.trim().trim_start_matches('\u{feff}');
@@ -122,20 +183,16 @@ fn parse_playlist(path: &Path, items: &mut Vec<MediaItem>) -> Result<(), Library
                 .filter(|title| !title.is_empty());
         } else if line.is_empty() || line.starts_with('#') {
             continue;
-        } else if let Ok(url) = Url::parse(line) {
+        } else {
+            let url = if let Ok(url) = Url::parse(line) {
+                url
+            } else {
+                resolve_entry(line)?
+            };
             if !matches!(url.scheme(), "http" | "https" | "file") {
                 return Err(LibraryError::Unsupported(line.to_owned()));
             }
             items.push(item_from_url(url, next_title.take())?);
-        } else {
-            let expanded = expand_home(line);
-            let entry = expanded.as_path();
-            let resolved = if entry.is_absolute() {
-                entry.to_owned()
-            } else {
-                base.join(entry)
-            };
-            items.push(item_from_path(&resolved, next_title.take())?);
         }
     }
     Ok(())
@@ -188,6 +245,15 @@ fn item_from_url(url: Url, title: Option<String>) -> Result<MediaItem, LibraryEr
 
 fn is_playlist(path: &Path) -> bool {
     extension(path).is_some_and(|value| matches!(value.as_str(), "m3u" | "m3u8"))
+}
+
+fn is_playlist_url(url: &Url) -> bool {
+    url.path_segments()
+        .and_then(Iterator::last)
+        .is_some_and(|segment| {
+            let path = Path::new(segment);
+            extension(path).is_some_and(|value| matches!(value.as_str(), "m3u" | "m3u8"))
+        })
 }
 
 fn is_audio(path: &Path) -> bool {
