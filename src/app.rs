@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "These operations are guarded by playlist and spectrum invariants."
+)]
+
 use std::{
     collections::VecDeque,
     time::{Duration, Instant},
@@ -12,6 +17,8 @@ use crate::{library::MediaItem, player::SpectrumFrame};
 pub enum Action {
     Next,
     Previous,
+    MoveNext,
+    MovePrevious,
     Quit,
     VolumeUp,
     VolumeDown,
@@ -20,6 +27,9 @@ pub enum Action {
     TogglePause,
     ToggleShuffle,
     AddSource,
+    PlaySelected,
+    OpenSearch,
+    ToggleHelp,
 }
 
 pub fn action_for_key(key: KeyEvent) -> Option<Action> {
@@ -27,8 +37,11 @@ pub fn action_for_key(key: KeyEvent) -> Option<Action> {
         return None;
     }
     match key.code {
-        KeyCode::Down | KeyCode::Char('n' | 'N') => Some(Action::Next),
-        KeyCode::Up | KeyCode::Char('p' | 'P') => Some(Action::Previous),
+        KeyCode::Down => Some(Action::MoveNext),
+        KeyCode::Up => Some(Action::MovePrevious),
+        KeyCode::Char('n' | 'N') => Some(Action::Next),
+        KeyCode::Char('p' | 'P') => Some(Action::Previous),
+        KeyCode::Enter => Some(Action::PlaySelected),
         KeyCode::Esc | KeyCode::Char('q' | 'Q') => Some(Action::Quit),
         KeyCode::Char('+' | '=' | '*') => Some(Action::VolumeUp),
         KeyCode::Char('-' | '_') => Some(Action::VolumeDown),
@@ -37,6 +50,8 @@ pub fn action_for_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char(' ') => Some(Action::TogglePause),
         KeyCode::Char('s' | 'S') => Some(Action::ToggleShuffle),
         KeyCode::Char('a' | 'A') => Some(Action::AddSource),
+        KeyCode::Char('/') => Some(Action::OpenSearch),
+        KeyCode::Char('h' | 'H') => Some(Action::ToggleHelp),
         _ => None,
     }
 }
@@ -53,6 +68,8 @@ pub enum PlaybackState {
 pub struct App {
     pub tracks: Vec<MediaItem>,
     pub selected: usize,
+    pub playing: Option<usize>,
+    pub playlist_offset: usize,
     pub playback: PlaybackState,
     pub volume: f64,
     pub muted: bool,
@@ -74,6 +91,10 @@ pub struct App {
     pub loaded_count: usize,
     pub shuffle_enabled: bool,
     pub source_input: Option<String>,
+    pub search_input: Option<String>,
+    pub search_selected: usize,
+    pub search_offset: usize,
+    pub help_visible: bool,
     pending_loads: usize,
 }
 
@@ -83,6 +104,8 @@ impl App {
         Self {
             tracks,
             selected: 0,
+            playing: None,
+            playlist_offset: 0,
             playback: PlaybackState::Stopped,
             volume: 1.0,
             muted: false,
@@ -104,6 +127,10 @@ impl App {
             loaded_count,
             shuffle_enabled: false,
             source_input: None,
+            search_input: None,
+            search_selected: 0,
+            search_offset: 0,
+            help_visible: false,
             pending_loads: 0,
         }
     }
@@ -168,6 +195,76 @@ impl App {
             .filter(|source| !source.trim().is_empty())
     }
 
+    pub fn begin_search(&mut self) {
+        self.search_input = Some(String::new());
+        self.search_selected = 0;
+        self.search_offset = 0;
+    }
+
+    pub fn append_search_character(&mut self, character: char) {
+        if let Some(input) = &mut self.search_input {
+            input.push(character);
+        }
+    }
+
+    pub fn remove_search_character(&mut self) {
+        if let Some(input) = &mut self.search_input {
+            input.pop();
+        }
+    }
+
+    pub fn submit_search(&mut self) {
+        self.search_input = None;
+    }
+
+    pub fn cancel_search(&mut self) {
+        self.search_input = None;
+    }
+
+    pub fn search_matches(&self) -> Vec<usize> {
+        let query = self
+            .search_input
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
+        self.tracks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, item)| {
+                (query.is_empty() || item.title.to_lowercase().contains(&query)).then_some(index)
+            })
+            .collect()
+    }
+
+    pub fn move_search_selection(&mut self, delta: isize) {
+        let count = self.search_matches().len();
+        if count == 0 {
+            self.search_selected = 0;
+        } else {
+            self.search_selected =
+                (self.search_selected as isize + delta).rem_euclid(count as isize) as usize;
+        }
+    }
+
+    pub fn selected_search_track(&self) -> Option<usize> {
+        self.search_matches().get(self.search_selected).copied()
+    }
+
+    pub fn ensure_search_offset(&mut self, viewport_height: usize) {
+        let count = self.search_matches().len();
+        if viewport_height == 0 {
+            return;
+        }
+        if self.search_selected < self.search_offset {
+            self.search_offset = self.search_selected;
+        } else if self.search_selected >= self.search_offset + viewport_height {
+            self.search_offset = self.search_selected + 1 - viewport_height;
+        }
+        self.search_offset = self
+            .search_offset
+            .min(count.saturating_sub(viewport_height));
+    }
+
     pub fn toggle_shuffle(&mut self) {
         self.shuffle_enabled = !self.shuffle_enabled;
         if self.shuffle_enabled {
@@ -190,10 +287,13 @@ impl App {
         self.tracks.get(self.selected)
     }
 
+    pub fn playing_track(&self) -> Option<&MediaItem> {
+        self.playing.and_then(|index| self.tracks.get(index))
+    }
+
     pub fn next(&mut self) {
         if !self.tracks.is_empty() {
             self.selected = (self.selected + 1) % self.tracks.len();
-            self.reset_progress();
         }
     }
 
@@ -203,8 +303,29 @@ impl App {
                 .selected
                 .checked_sub(1)
                 .unwrap_or(self.tracks.len() - 1);
-            self.reset_progress();
         }
+    }
+
+    pub fn ensure_playlist_offset(
+        &mut self,
+        selected_position: Option<usize>,
+        item_count: usize,
+        viewport_height: usize,
+    ) {
+        let Some(selected_position) = selected_position else {
+            return;
+        };
+        if viewport_height == 0 {
+            return;
+        }
+        if selected_position < self.playlist_offset {
+            self.playlist_offset = selected_position;
+        } else if selected_position >= self.playlist_offset + viewport_height {
+            self.playlist_offset = selected_position + 1 - viewport_height;
+        }
+        self.playlist_offset = self
+            .playlist_offset
+            .min(item_count.saturating_sub(viewport_height));
     }
 
     pub fn change_volume(&mut self, delta: f64) {
@@ -309,34 +430,40 @@ impl App {
             *peak = (*peak - 0.018).max(*level);
         }
     }
-
-    fn reset_progress(&mut self) {
-        self.position = Duration::ZERO;
-        self.duration = Duration::ZERO;
-        self.buffered_percent = 0;
-        self.spectrum.fill(0.0);
-        self.spectrum_peaks.fill(0.0);
-        self.spectrum_active = false;
-        self.spectrum_pending.clear();
-        self.spectrum_activity = 0.0;
-        self.visualizer_rotation = 0.0;
-        self.stream_title = None;
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crossterm::event::KeyModifiers;
-
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
     #[test]
-    fn preserves_original_key_bindings() {
-        assert_eq!(action_for_key(key(KeyCode::Char('N'))), Some(Action::Next));
-        assert_eq!(action_for_key(key(KeyCode::Up)), Some(Action::Previous));
+    fn check_key_bindings() {
+        assert_eq!(
+            action_for_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::SHIFT)),
+            Some(Action::Next)
+        );
+        assert_eq!(
+            action_for_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::SHIFT)),
+            Some(Action::Next)
+        );
+        assert_eq!(action_for_key(key(KeyCode::Up)), Some(Action::MovePrevious));
+        assert_eq!(action_for_key(key(KeyCode::Char('n'))), Some(Action::Next));
+        assert_eq!(
+            action_for_key(key(KeyCode::Char('p'))),
+            Some(Action::Previous)
+        );
+        assert_eq!(
+            action_for_key(KeyEvent::new(KeyCode::Char('P'), KeyModifiers::SHIFT)),
+            Some(Action::Previous)
+        );
+        assert_eq!(
+            action_for_key(key(KeyCode::Enter)),
+            Some(Action::PlaySelected)
+        );
         assert_eq!(action_for_key(key(KeyCode::Esc)), Some(Action::Quit));
         assert_eq!(
             action_for_key(key(KeyCode::Char('_'))),
@@ -349,6 +476,10 @@ mod tests {
         assert_eq!(
             action_for_key(key(KeyCode::Char('s'))),
             Some(Action::ToggleShuffle)
+        );
+        assert_eq!(
+            action_for_key(key(KeyCode::Char('h'))),
+            Some(Action::ToggleHelp)
         );
     }
 
@@ -374,6 +505,62 @@ mod tests {
     }
 
     #[test]
+    fn navigation_does_not_reset_playback_progress() {
+        let tracks = vec![
+            MediaItem {
+                title: "one".into(),
+                uri: url::Url::parse("file:///one.mp3").unwrap(),
+                kind: crate::library::MediaKind::Local,
+            },
+            MediaItem {
+                title: "two".into(),
+                uri: url::Url::parse("file:///two.mp3").unwrap(),
+                kind: crate::library::MediaKind::Local,
+            },
+        ];
+        let mut app = App::new(tracks);
+        app.playing = Some(0);
+        app.playback = PlaybackState::Playing;
+        app.position = Duration::from_secs(42);
+
+        app.next();
+
+        assert_eq!(app.selected, 1);
+        assert_eq!(app.playing, Some(0));
+        assert_eq!(app.position, Duration::from_secs(42));
+        assert_eq!(app.playback, PlaybackState::Playing);
+    }
+
+    #[test]
+    fn search_selects_a_match_without_changing_playback() {
+        let tracks = vec![
+            MediaItem {
+                title: "First song".into(),
+                uri: url::Url::parse("file:///first.mp3").unwrap(),
+                kind: crate::library::MediaKind::Local,
+            },
+            MediaItem {
+                title: "Second song".into(),
+                uri: url::Url::parse("file:///second.mp3").unwrap(),
+                kind: crate::library::MediaKind::Local,
+            },
+        ];
+        let mut app = App::new(tracks);
+        app.playing = Some(0);
+        app.playback = PlaybackState::Playing;
+        app.position = Duration::from_secs(12);
+        app.begin_search();
+        for character in "second".chars() {
+            app.append_search_character(character);
+        }
+        assert_eq!(app.selected_search_track(), Some(1));
+        assert_eq!(app.playing, Some(0));
+        assert_eq!(app.position, Duration::from_secs(12));
+        assert_eq!(app.search_matches(), vec![1]);
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "The test checks exact clamp boundaries.")]
     fn volume_is_clamped() {
         let mut app = App::new(vec![]);
         app.change_volume(1.0);
@@ -383,6 +570,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "The test checks exact initial peak state."
+    )]
     fn spectrum_uses_fast_attack_and_peak_decay() {
         let mut app = App::new(vec![]);
         app.playback = PlaybackState::Playing;

@@ -40,6 +40,7 @@ pub trait AudioPlayer: Send + Sync {
     fn pause(&self) -> anyhow::Result<()>;
     fn resume(&self) -> anyhow::Result<()>;
     fn stop(&self) -> anyhow::Result<()>;
+    fn seek(&self, position: Duration) -> anyhow::Result<()>;
     fn set_volume(&self, volume: f64) -> anyhow::Result<()>;
     fn set_muted(&self, muted: bool) -> anyhow::Result<()>;
     fn snapshot(&self) -> PlayerSnapshot;
@@ -47,6 +48,12 @@ pub trait AudioPlayer: Send + Sync {
 
 #[cfg(feature = "gstreamer-backend")]
 mod gst_backend {
+    #![expect(
+        clippy::cast_sign_loss,
+        clippy::let_underscore_must_use,
+        reason = "GStreamer and channel operations intentionally tolerate shutdown errors."
+    )]
+
     use std::{
         sync::atomic::{AtomicBool, Ordering},
         thread,
@@ -199,6 +206,16 @@ mod gst_backend {
             Ok(())
         }
 
+        fn seek(&self, position: Duration) -> anyhow::Result<()> {
+            self.playbin.seek_simple(
+                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                gst::ClockTime::from_nseconds(
+                    u64::try_from(position.as_nanos()).unwrap_or(u64::MAX),
+                ),
+            )?;
+            Ok(())
+        }
+
         fn set_volume(&self, volume: f64) -> anyhow::Result<()> {
             self.playbin.set_property("volume", volume);
             Ok(())
@@ -245,6 +262,10 @@ mod gst_backend {
         use super::normalize_magnitude;
 
         #[test]
+        #[expect(
+            clippy::float_cmp,
+            reason = "The test checks exact normalized endpoints."
+        )]
         fn normalizes_spectrum_db_with_reactive_curve() {
             assert_eq!(normalize_magnitude(-80.0), 0.0);
             assert_eq!(normalize_magnitude(0.0), 1.0);
@@ -281,6 +302,10 @@ impl AudioPlayer for DefaultPlayer {
     }
 
     fn stop(&self) -> anyhow::Result<()> {
+        anyhow::bail!("cloudruby was built without the gstreamer-backend feature")
+    }
+
+    fn seek(&self, _: Duration) -> anyhow::Result<()> {
         anyhow::bail!("cloudruby was built without the gstreamer-backend feature")
     }
 

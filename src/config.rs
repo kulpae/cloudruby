@@ -144,6 +144,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "The test checks the parsed configuration value."
+    )]
     fn accepts_legacy_and_detailed_styles() {
         let config: Config = toml::from_str(
             r##"

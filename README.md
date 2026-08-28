@@ -82,16 +82,23 @@ present.
 
 | Key | Action |
 | --- | --- |
-| `n`, `N`, Down | Next entry |
-| `p`, `P`, Up | Previous entry |
+| `n` | Play next entry |
+| `p` | Play previous entry |
+| Down or mouse-wheel down | Select next entry (playback continues) |
+| Up or mouse-wheel up | Select previous entry (playback continues) |
+| Enter or click a row | Play selected entry |
 | Space | Pause or resume |
-| `+`, `=` | Raise volume |
+| `+`, `=`, `*` | Raise volume |
 | `-`, `_` | Lower volume |
 | `m`, `M` | Toggle mute |
 | `s`, `S` | Toggle shuffle |
 | `a`, `A` | Add a source while the TUI is open |
 | `v`, `V` | Toggle source information |
+| `/` | Search track titles; Enter plays the selected result, Esc closes |
 | `q`, `Q`, Esc | Quit |
+
+Matching results appear in a search dialog. Selection and playback of the main
+queue remain unchanged until you press Enter or click a result.
 
 ## Configuration
 

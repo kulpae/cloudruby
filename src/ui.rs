@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_sign_loss,
+    clippy::indexing_slicing,
+    clippy::string_slice,
+    reason = "Rendering math and fixed-width terminal data are bounded by layout invariants."
+)]
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Margin, Rect},
@@ -5,9 +12,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Clear, Gauge, List, ListItem, ListState, Padding, Paragraph,
-        Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs, Wrap,
+        Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
     },
 };
+use std::time::Duration;
 
 use crate::{
     app::{App, PlaybackState},
@@ -15,8 +23,91 @@ use crate::{
     library::MediaKind,
 };
 
-pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
+pub fn playlist_index_at(
+    area: Rect,
+    x: u16,
+    y: u16,
+    track_count: usize,
+    offset: usize,
+) -> Option<usize> {
+    let inner = area.inner(Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
+    if track_count == 0 || x < inner.x || x >= inner.x + inner.width || y < inner.y {
+        return None;
+    }
+    let visible_height = usize::from(inner.height);
+    let index = offset + usize::from(y - inner.y);
+    (index < track_count && index < offset + visible_height).then_some(index)
+}
+
+pub fn playlist_area(area: Rect) -> Option<Rect> {
+    let inner = Block::default().borders(Borders::ALL).inner(area);
+    if inner.height < 8 || inner.width < 32 {
+        return None;
+    }
+    let rows = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Length(3),
+        Constraint::Min(5),
+        Constraint::Length(1),
+        Constraint::Length(2),
+    ])
+    .split(inner);
+    if rows[2].width >= 92 {
+        Some(
+            Layout::horizontal([Constraint::Percentage(64), Constraint::Percentage(36)])
+                .spacing(1)
+                .split(rows[2])[0],
+        )
+    } else {
+        Some(rows[2])
+    }
+}
+
+pub fn progress_area(area: Rect) -> Option<Rect> {
+    let inner = Block::default().borders(Borders::ALL).inner(area);
+    if inner.height < 8 || inner.width < 32 {
+        return None;
+    }
+    Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Length(3),
+        Constraint::Min(5),
+        Constraint::Length(1),
+        Constraint::Length(2),
+    ])
+    .split(inner)
+    .get(1)
+    .copied()
+}
+
+pub fn progress_click_position(area: Rect, x: u16, y: u16, duration: Duration) -> Option<Duration> {
+    if duration.is_zero() {
+        return None;
+    }
+    let inner = Block::default().borders(Borders::ALL).inner(area);
+    if x < inner.x || x >= inner.x + inner.width || y < inner.y || y >= inner.y + inner.height {
+        return None;
+    }
+    let width = f64::from(inner.width.saturating_sub(1).max(1));
+    let ratio = f64::from(x - inner.x) / width;
+    Some(duration.mul_f64(ratio.clamp(0.0, 1.0)))
+}
+
+pub fn render(frame: &mut Frame<'_>, app: &mut App, config: &UiConfig) {
     let area = frame.area();
+    let local_count = app
+        .tracks
+        .iter()
+        .filter(|item| item.kind == MediaKind::Local)
+        .count();
+    let stream_count = app.tracks.len() - local_count;
+    let track_stats = format!(
+        " all {} · local {local_count} · stream {stream_count} ",
+        app.tracks.len()
+    );
     frame.render_widget(
         Block::default().style(themed(
             config,
@@ -36,9 +127,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
                 themed(config, "header", Style::new().white().bold()),
             ),
         ]))
-        .title_bottom(
-            Line::from(format!(" {} tracks ", app.tracks.len())).alignment(Alignment::Right),
-        )
+        .title_bottom(Line::from(track_stats).alignment(Alignment::Right))
         .borders(Borders::ALL)
         .border_type(border_type(config))
         .border_style(themed(config, "border", Style::new().dark_gray()));
@@ -48,6 +137,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
     if inner.height < 8 || inner.width < 32 {
         render_compact(frame, app, inner, config);
         render_source_input(frame, app, area, config);
+        render_search_input(frame, app, area, config);
+        render_help(frame, app, area, config);
         return;
     }
 
@@ -79,12 +170,15 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
         render_details(frame, app, centered_rect(width, 68, area), config, true);
     }
     render_source_input(frame, app, area, config);
+    render_search_input(frame, app, area, config);
+    render_help(frame, app, area, config);
 }
 
 fn render_compact(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
     let title = app
         .stream_title
         .as_deref()
+        .or_else(|| app.playing_track().map(|item| item.title.as_str()))
         .or_else(|| app.current_track().map(|item| item.title.as_str()))
         .unwrap_or("No media");
     let symbol = playback_symbol(app.playback, config.unicode);
@@ -116,8 +210,145 @@ fn render_source_input(frame: &mut Frame<'_>, app: &App, area: Rect, config: &Ui
     );
 }
 
+pub fn search_dialog_rect(area: Rect, result_count: usize) -> Rect {
+    let width = (area.width * 78 / 100).clamp(32, area.width);
+    let height = (result_count as u16 + 4)
+        .min(area.height.saturating_sub(2))
+        .max(4);
+    Rect::new(
+        area.x + area.width.saturating_sub(width) / 2,
+        area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    )
+}
+
+pub fn search_results_area(dialog: Rect) -> Rect {
+    let inner = dialog.inner(Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
+    Rect::new(
+        inner.x,
+        inner.y + 1,
+        inner.width,
+        inner.height.saturating_sub(1),
+    )
+}
+
+pub fn search_index_at(
+    area: Rect,
+    x: u16,
+    y: u16,
+    result_count: usize,
+    offset: usize,
+) -> Option<usize> {
+    if x < area.x || x >= area.x + area.width || y < area.y || y >= area.y + area.height {
+        return None;
+    }
+    let index = offset + usize::from(y - area.y);
+    (index < result_count).then_some(index)
+}
+
+fn render_search_input(frame: &mut Frame<'_>, app: &mut App, area: Rect, config: &UiConfig) {
+    let Some(input) = app.search_input.clone() else {
+        return;
+    };
+    let matches = app.search_matches();
+    let dialog = search_dialog_rect(area, matches.len());
+    let results = search_results_area(dialog);
+    app.ensure_search_offset(usize::from(results.height));
+    frame.render_widget(Clear, dialog);
+    frame.render_widget(
+        Block::default()
+            .title(format!(
+                " Search · {} matches · Enter play · Esc close ",
+                matches.len()
+            ))
+            .borders(Borders::ALL)
+            .border_type(border_type(config))
+            .border_style(themed(config, "border", Style::new().cyan())),
+        dialog,
+    );
+    frame.render_widget(
+        Paragraph::new(format!(" /{input}")).style(themed(
+            config,
+            "input",
+            Style::new().fg(Color::White),
+        )),
+        Rect::new(results.x, results.y.saturating_sub(1), results.width, 1),
+    );
+    let items = matches
+        .iter()
+        .map(|&index| ListItem::new(Line::from(format!(" {}", app.tracks[index].title))));
+    let list = List::new(items)
+        .style(themed(config, "playlist", Style::new().white()))
+        .highlight_symbol(if config.unicode { "▌" } else { ">" })
+        .highlight_style(themed(
+            config,
+            "playlist_active",
+            Style::new().black().on_cyan().bold(),
+        ));
+    let selected = matches
+        .first()
+        .map(|_| app.search_selected.min(matches.len() - 1));
+    let mut state = ListState::default()
+        .with_selected(selected)
+        .with_offset(app.search_offset);
+    frame.render_stateful_widget(list, results, &mut state);
+}
+
+fn render_help(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
+    if !app.help_visible {
+        return;
+    }
+    let dialog = centered_rect(78, 76, area);
+    let bindings = [
+        ("n / N", "play next track"),
+        ("p / P", "play previous track"),
+        ("Down / wheel down", "select next track"),
+        ("Up / wheel up", "select previous track"),
+        ("Enter", "play the selected track"),
+        ("Click progress bar", "seek to that position"),
+        ("Space", "pause or resume playback"),
+        ("+ / =", "raise volume"),
+        ("- / _", "lower volume"),
+        ("m", "toggle mute"),
+        ("s", "toggle shuffle"),
+        ("a", "add a source"),
+        ("v", "toggle track information"),
+        ("/", "search track titles"),
+        ("h / Esc", "close this help"),
+        ("q / Esc", "quit"),
+    ];
+    let mut lines = bindings
+        .iter()
+        .map(|(key, action)| {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {key:<30}"),
+                    themed(config, "key", Style::new().cyan().bold()),
+                ),
+                Span::styled(*action, themed(config, "footer", Style::new().white())),
+            ])
+        })
+        .collect::<Vec<_>>();
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        " Search: type to filter matches; Enter or click a result to play it.",
+        themed(config, "footer", Style::new().dark_gray()),
+    )));
+    frame.render_widget(Clear, dialog);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(panel(config, " Keyboard shortcuts "))
+            .wrap(Wrap { trim: false }),
+        dialog,
+    );
+}
+
 fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
-    let item = app.current_track();
+    let item = app.playing_track().or_else(|| app.current_track());
     let title = app
         .stream_title
         .as_deref()
@@ -147,34 +378,6 @@ fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig
             .style(themed(config, "volume", Style::new().yellow())),
         header[1],
     );
-
-    let local_count = app
-        .tracks
-        .iter()
-        .filter(|item| item.kind == MediaKind::Local)
-        .count();
-    let stream_count = app.tracks.len() - local_count;
-    let selected = match item.map(|item| item.kind) {
-        Some(MediaKind::Stream) => 2,
-        Some(MediaKind::Local) => 1,
-        None => 0,
-    };
-    frame.render_widget(
-        Tabs::new([
-            Line::from(format!(" QUEUE {} ", app.tracks.len())),
-            Line::from(format!(" LOCAL {local_count} ")),
-            Line::from(format!(" STREAMS {stream_count} ")),
-        ])
-        .select(selected)
-        .divider("│")
-        .style(themed(config, "tabs", Style::new().dark_gray()))
-        .highlight_style(themed(
-            config,
-            "tabs_active",
-            Style::new().cyan().add_modifier(Modifier::BOLD),
-        )),
-        Rect::new(area.x, area.y.saturating_add(1), area.width, 1),
-    );
 }
 
 fn render_progress(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
@@ -192,7 +395,7 @@ fn render_progress(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConf
             format_time(app.duration.as_secs())
         )
     };
-    let block = panel(config, " Playback ");
+    let block = panel(config, "");
     let inner = block.inner(area);
     frame.render_widget(block, area);
     // Keep the visualizer's canvas in a deep blue-black so low-frequency
@@ -220,7 +423,7 @@ fn render_progress(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConf
     );
 }
 
-fn render_playlist(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
+fn render_playlist(frame: &mut Frame<'_>, app: &mut App, area: Rect, config: &UiConfig) {
     let position = if app.tracks.is_empty() {
         "0/0".to_owned()
     } else {
@@ -229,6 +432,11 @@ fn render_playlist(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConf
     let panel_title = format!(" Queue · {position} ");
     let block = panel(config, &panel_title);
     let inner = block.inner(area);
+    app.ensure_playlist_offset(
+        Some(app.selected),
+        app.tracks.len(),
+        usize::from(inner.height),
+    );
     let items = app.tracks.iter().enumerate().map(|(index, item)| {
         let marker = match (item.kind, config.unicode) {
             (MediaKind::Local, true) => "♪",
@@ -257,7 +465,9 @@ fn render_playlist(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConf
             "playlist_active",
             Style::new().black().on_cyan().bold(),
         ));
-    let mut state = ListState::default().with_selected(Some(app.selected));
+    let mut state = ListState::default()
+        .with_selected(Some(app.selected))
+        .with_offset(app.playlist_offset);
     frame.render_stateful_widget(list, area, &mut state);
 
     if app.tracks.len() > usize::from(inner.height) {
@@ -331,7 +541,10 @@ fn render_waiting_indicator(frame: &mut Frame<'_>, area: Rect, app: &App, config
     );
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Retained as an alternate renderer for terminal compatibility."
+)]
 fn render_braille_spectrum(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -372,7 +585,10 @@ fn render_braille_spectrum(
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Retained as an alternate renderer for terminal compatibility."
+)]
 fn render_ascii_spectrum(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -406,7 +622,10 @@ fn render_ascii_spectrum(
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Retained as an alternate renderer for terminal compatibility."
+)]
 fn spectrum_columns(
     bands: &[f32],
     count: usize,
@@ -434,7 +653,6 @@ fn spectrum_columns(
         .collect()
 }
 
-#[allow(dead_code)]
 fn braille_cell(
     left_height: usize,
     right_height: usize,
@@ -468,7 +686,6 @@ fn braille_cell(
     (char::from_u32(0x2800 + bits).unwrap_or(' '), has_peak)
 }
 
-#[allow(dead_code)]
 fn visualizer_style(config: &UiConfig, row: usize, rows: usize, peak: bool) -> Style {
     if peak {
         return themed(
@@ -683,7 +900,10 @@ fn render_radial_braille(frame: &mut Frame<'_>, area: Rect, app: &App, config: &
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The renderer receives independent buffers for each visual layer."
+)]
 fn plot_braille(
     bits: &mut [u32],
     peaks: &mut [bool],
@@ -781,7 +1001,7 @@ fn render_details(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfi
     if overlay {
         frame.render_widget(Clear, area);
     }
-    let item = app.current_track();
+    let item = app.playing_track().or_else(|| app.current_track());
     let kind = item.map_or("—", |item| match item.kind {
         MediaKind::Local => "Local file",
         MediaKind::Stream => "Network stream",
@@ -882,11 +1102,8 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, config: &UiConfig) {
     let bindings = [
         ("n/p", "track"),
         ("space", "pause"),
-        ("+/-", "volume"),
-        ("m", "mute"),
-        ("s", "shuffle"),
-        ("v", "info"),
-        ("a", "add source"),
+        ("/", "search"),
+        ("h", "help"),
         ("q", "quit"),
     ];
     let mut spans = vec![Span::raw(" ")];
@@ -914,7 +1131,9 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, config: &UiConfig) {
         ));
     }
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }),
+        Paragraph::new(Line::from(spans))
+            .block(Block::default().padding(Padding::left(1)))
+            .wrap(Wrap { trim: true }),
         area,
     );
 }
@@ -1126,8 +1345,9 @@ mod tests {
     fn renders_rich_player_regions() {
         let backend = TestBackend::new(110, 28);
         let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = sample_app();
         terminal
-            .draw(|frame| render(frame, &sample_app(), &UiConfig::default()))
+            .draw(|frame| render(frame, &mut app, &UiConfig::default()))
             .unwrap();
         let rendered: String = terminal
             .backend()
@@ -1138,7 +1358,7 @@ mod tests {
             .collect();
         assert!(rendered.contains("CloudRuby"));
         assert!(rendered.contains("Clockwork Hearts"));
-        assert!(rendered.contains("STREAMS 1"));
+        assert!(rendered.contains("all 2 · local 1 · stream 1"));
         assert!(rendered.contains("Spectrum"));
         assert!(
             rendered
@@ -1156,7 +1376,7 @@ mod tests {
         let mut app = sample_app();
         app.info_visible = true;
         terminal
-            .draw(|frame| render(frame, &app, &UiConfig::default()))
+            .draw(|frame| render(frame, &mut app, &UiConfig::default()))
             .unwrap();
         let rendered: String = terminal
             .backend()

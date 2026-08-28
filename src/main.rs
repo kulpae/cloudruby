@@ -14,8 +14,15 @@ use cloudruby::{
     player::{AudioPlayer, DefaultPlayer, PlayerEvent, PlayerState},
     ui,
 };
-use crossterm::event::{Event, EventStream};
+use crossterm::{
+    event::{
+        DisableMouseCapture, EnableMouseCapture, Event, EventStream, MouseButton, MouseEvent,
+        MouseEventKind,
+    },
+    execute,
+};
 use futures_util::StreamExt;
+use ratatui::layout::{Rect, Size};
 use tokio::sync::mpsc;
 
 enum LoadEvent {
@@ -95,10 +102,10 @@ async fn main() -> anyhow::Result<()> {
 fn spawn_loader(sources: Vec<String>, load_tx: mpsc::UnboundedSender<LoadEvent>) {
     tokio::task::spawn_blocking(move || {
         let result = load_sources_incremental(&sources, |track| {
-            let _ = load_tx.send(LoadEvent::Track(track));
+            drop(load_tx.send(LoadEvent::Track(track)));
         })
         .map_err(|error| error.to_string());
-        let _ = load_tx.send(LoadEvent::Finished(result));
+        drop(load_tx.send(LoadEvent::Finished(result)));
     });
 }
 
@@ -124,6 +131,7 @@ fn parse_stdin_sources(input: &str) -> Vec<String> {
 fn play_selected(player: &Arc<dyn AudioPlayer>, app: &mut App) -> anyhow::Result<()> {
     let item = app.current_track().context("playlist is empty")?;
     player.play_uri(item.uri.as_str())?;
+    app.playing = Some(app.selected);
     app.playback = PlaybackState::Playing;
     app.position = Duration::ZERO;
     app.duration = Duration::ZERO;
@@ -139,11 +147,12 @@ async fn run_tui(
     config: Config,
 ) -> anyhow::Result<()> {
     let mut terminal = ratatui::init();
+    execute!(io::stdout(), EnableMouseCapture)?;
     let result = async {
         let mut input = EventStream::new();
         let mut tick = tokio::time::interval(Duration::from_millis(33));
         loop {
-            terminal.draw(|frame| ui::render(frame, &app, &config.ui))?;
+            terminal.draw(|frame| ui::render(frame, &mut app, &config.ui))?;
             tokio::select! {
                 _ = tick.tick() => {
                     let snapshot = player.snapshot();
@@ -177,6 +186,38 @@ async fn run_tui(
                                 }
                                 continue;
                             }
+                            if app.search_input.is_some() {
+                                match key.code {
+                                    crossterm::event::KeyCode::Enter => {
+                                        if let Some(index) = app.selected_search_track() {
+                                            app.selected = index;
+                                            app.search_input = None;
+                                            play_selected(&player, &mut app)?;
+                                        }
+                                    }
+                                    crossterm::event::KeyCode::Esc => app.cancel_search(),
+                                    crossterm::event::KeyCode::Up => app.move_search_selection(-1),
+                                    crossterm::event::KeyCode::Down => app.move_search_selection(1),
+                                    crossterm::event::KeyCode::Backspace => {
+                                        app.remove_search_character()
+                                    }
+                                    crossterm::event::KeyCode::Char(character) => {
+                                        app.append_search_character(character)
+                                    }
+                                    _ => {}
+                                }
+                                continue;
+                            }
+                            if app.help_visible {
+                                if matches!(
+                                    key.code,
+                                    crossterm::event::KeyCode::Esc
+                                        | crossterm::event::KeyCode::Char('h' | 'H')
+                                ) {
+                                    app.help_visible = false;
+                                }
+                                continue;
+                            }
                             if let Some(action) = action_for_key(key)
                                 && handle_action(action, &player, &mut app)?
                             {
@@ -184,6 +225,13 @@ async fn run_tui(
                             }
                         }
                         Some(Ok(Event::Resize(_, _))) => {}
+                        Some(Ok(Event::Mouse(mouse))) => {
+                            if app.search_input.is_some() {
+                                handle_search_mouse(mouse, &player, &mut app, terminal.size()?)?;
+                            } else {
+                                handle_mouse(mouse, &player, &mut app, terminal.size()?)?;
+                            }
+                        }
                         Some(Err(error)) => return Err(error.into()),
                         None => break,
                         _ => {}
@@ -247,7 +295,8 @@ async fn run_tui(
         Ok::<_, anyhow::Error>(())
     }
     .await;
-    let _ = player.stop();
+    drop(player.stop());
+    drop(execute!(io::stdout(), DisableMouseCapture));
     ratatui::restore();
     result
 }
@@ -267,6 +316,11 @@ fn handle_action(
             app.previous();
             play_selected(player, app)?;
         }
+        Action::MoveNext => app.next(),
+        Action::MovePrevious => app.previous(),
+        Action::PlaySelected => play_selected(player, app)?,
+        Action::OpenSearch => app.begin_search(),
+        Action::ToggleHelp => app.help_visible = !app.help_visible,
         Action::VolumeUp => {
             app.change_volume(0.05);
             player.set_volume(app.volume)?;
@@ -314,6 +368,77 @@ fn handle_action(
         Action::AddSource => app.begin_add_source(),
     }
     Ok(false)
+}
+
+fn handle_mouse(
+    mouse: MouseEvent,
+    player: &Arc<dyn AudioPlayer>,
+    app: &mut App,
+    size: Size,
+) -> anyhow::Result<()> {
+    let area = Rect::new(0, 0, size.width, size.height);
+    match mouse.kind {
+        MouseEventKind::ScrollDown => app.next(),
+        MouseEventKind::ScrollUp => app.previous(),
+        MouseEventKind::Down(MouseButton::Left) => {
+            if let Some(progress_area) = ui::progress_area(area)
+                && let Some(position) = ui::progress_click_position(
+                    progress_area,
+                    mouse.column,
+                    mouse.row,
+                    app.duration,
+                )
+            {
+                player.seek(position)?;
+                app.position = position;
+            } else if let Some(playlist_area) = ui::playlist_area(area)
+                && let Some(index) = ui::playlist_index_at(
+                    playlist_area,
+                    mouse.column,
+                    mouse.row,
+                    app.tracks.len(),
+                    app.playlist_offset,
+                )
+            {
+                app.selected = index;
+                play_selected(player, app)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_search_mouse(
+    mouse: MouseEvent,
+    player: &Arc<dyn AudioPlayer>,
+    app: &mut App,
+    size: Size,
+) -> anyhow::Result<()> {
+    let area = Rect::new(0, 0, size.width, size.height);
+    let matches = app.search_matches();
+    let dialog = ui::search_dialog_rect(area, matches.len());
+    let results = ui::search_results_area(dialog);
+    match mouse.kind {
+        MouseEventKind::ScrollDown => app.move_search_selection(1),
+        MouseEventKind::ScrollUp => app.move_search_selection(-1),
+        MouseEventKind::Down(MouseButton::Left) => {
+            if let Some(index) = ui::search_index_at(
+                results,
+                mouse.column,
+                mouse.row,
+                matches.len(),
+                app.search_offset,
+            ) && let Some(&track_index) = matches.get(index)
+            {
+                app.selected = track_index;
+                app.search_input = None;
+                play_selected(player, app)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn playback_message(state: PlaybackState) -> &'static str {
