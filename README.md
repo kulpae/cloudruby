@@ -1,4 +1,14 @@
-# CloudRuby
+<h1 align="center">CloudRuby</h1>
+
+<p align="center">
+ <img src="./doc/anim_1.webp" alt="CloudRuby terminal demo" />
+</p>
+
+<p align="center">
+ <a href="https://github.com/kulpae/cloudruby/actions/workflows/rust.yml"><img src="https://github.com/kulpae/cloudruby/actions/workflows/rust.yml/badge.svg" alt="Rust CI" /></a>
+ <a href="https://github.com/kulpae/cloudruby/stargazers"><img src="https://img.shields.io/github/stars/kulpae/cloudruby?style=flat" alt="GitHub stars" /></a>
+ <a href="./LICENSE"><img src="https://img.shields.io/github/license/kulpae/cloudruby" alt="License" /></a>
+</p>
 
 CloudRuby is a terminal music player. It plays audio from local
 folders, individual files, M3U/M3U8 playlists, and HTTP(S) streams such as
@@ -184,10 +194,7 @@ Command-line sources replace configured sources for that run. See
 
 
 
-![Terminal: Konsole, Font: Hack 14pt](doc/anim_1.webp?raw=true "Figure 1")
-
-![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Figure 2")
-
+![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Figure 1")
 
 ## Development
 
