@@ -279,7 +279,7 @@ fn render_playlist(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConf
 fn render_visualizer(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
     let energy = app.spectrum_activity;
     let title = format!(
-        " FFT Spectrum · RADIAL · {:>3}% · {:>3.0}° ",
+        " Spectrum · RADIAL · {:>3}🗲 · {:>3.0}° ",
         (energy * 100.0).round(),
         app.visualizer_rotation.to_degrees().rem_euclid(360.0)
     );
@@ -296,30 +296,33 @@ fn render_visualizer(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiCo
     if inner.is_empty() {
         return;
     }
-    if !app.spectrum_active || app.spectrum.is_empty() {
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::from(""),
-                Line::from(Span::styled(
-                    "waiting for audio…",
-                    themed(config, "visualizer_idle", Style::new().dark_gray().italic()),
-                )),
-                Line::from(Span::styled(
-                    "GStreamer FFT analyzer",
-                    themed(config, "hint", Style::new().dark_gray()),
-                )),
-            ])
-            .alignment(Alignment::Center),
-            inner,
-        );
-        return;
-    }
-
     if config.unicode {
         render_radial_braille(frame, inner, app, config);
     } else {
         render_radial_ascii(frame, inner, app, config);
     }
+
+    if !app.spectrum_active || app.spectrum.is_empty() {
+        render_waiting_indicator(frame, inner, app, config);
+    }
+}
+
+fn render_waiting_indicator(frame: &mut Frame<'_>, area: Rect, app: &App, config: &UiConfig) {
+    let unicode_spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let ascii_spinner = ["|", "/", "-", "\\"];
+    let spinner = if config.unicode {
+        unicode_spinner[(app.visualizer_frame / 2) as usize % unicode_spinner.len()]
+    } else {
+        ascii_spinner[(app.visualizer_frame / 3) as usize % ascii_spinner.len()]
+    };
+    let x = area.x + area.width / 2;
+    let y = area.y + area.height / 2;
+    frame.buffer_mut().set_string(
+        x,
+        y,
+        spinner,
+        themed(config, "visualizer_idle", Style::new().bold()),
+    );
 }
 
 #[allow(dead_code)]
@@ -1119,7 +1122,7 @@ mod tests {
         assert!(rendered.contains("CloudRuby"));
         assert!(rendered.contains("Clockwork Hearts"));
         assert!(rendered.contains("STREAMS 1"));
-        assert!(rendered.contains("FFT Spectrum"));
+        assert!(rendered.contains("Spectrum"));
         assert!(
             rendered
                 .chars()

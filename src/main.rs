@@ -206,6 +206,9 @@ async fn run_tui(
                         PlayerState::Paused => PlaybackState::Paused,
                         PlayerState::Stopped => PlaybackState::Stopped,
                     },
+                    Some(PlayerEvent::StreamStarted(generation)) => {
+                        app.start_spectrum_stream(generation);
+                    }
                     Some(PlayerEvent::Spectrum(frame)) => app.queue_spectrum(frame),
                     None => {}
                 },

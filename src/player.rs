@@ -8,6 +8,7 @@ pub enum PlayerEvent {
     Error(String),
     Buffering(u8),
     State(PlayerState),
+    StreamStarted(u64),
     Spectrum(SpectrumFrame),
 }
 
@@ -16,6 +17,7 @@ pub struct SpectrumFrame {
     pub bands: Vec<f32>,
     pub running_time: Duration,
     pub duration: Duration,
+    pub generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,6 +85,7 @@ mod gst_backend {
             thread::Builder::new()
                 .name("cloudruby-gstreamer".into())
                 .spawn(move || {
+                    let mut spectrum_generation = 0_u64;
                     while watcher_running.load(Ordering::Relaxed) {
                         let Some(message) = bus.timed_pop(gst::ClockTime::from_mseconds(100))
                         else {
@@ -90,6 +93,11 @@ mod gst_backend {
                         };
                         use gst::MessageView;
                         match message.view() {
+                            MessageView::StreamStart(..) => {
+                                spectrum_generation = spectrum_generation.wrapping_add(1);
+                                let _ =
+                                    events.send(PlayerEvent::StreamStarted(spectrum_generation));
+                            }
                             MessageView::Eos(..) => {
                                 let _ = events.send(PlayerEvent::EndOfStream);
                             }
@@ -143,6 +151,7 @@ mod gst_backend {
                                             bands,
                                             running_time,
                                             duration,
+                                            generation: spectrum_generation,
                                         }));
                                     }
                                 }

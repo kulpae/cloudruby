@@ -30,7 +30,7 @@ pub fn action_for_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Down | KeyCode::Char('n' | 'N') => Some(Action::Next),
         KeyCode::Up | KeyCode::Char('p' | 'P') => Some(Action::Previous),
         KeyCode::Esc | KeyCode::Char('q' | 'Q') => Some(Action::Quit),
-        KeyCode::Char('+' | '=') => Some(Action::VolumeUp),
+        KeyCode::Char('+' | '=' | '*') => Some(Action::VolumeUp),
         KeyCode::Char('-' | '_') => Some(Action::VolumeDown),
         KeyCode::Char('m' | 'M') => Some(Action::ToggleMute),
         KeyCode::Char('v' | 'V') => Some(Action::ToggleInfo),
@@ -66,6 +66,7 @@ pub struct App {
     pub visualizer_rotation: f32,
     pub visualizer_frame: u64,
     spectrum_pending: VecDeque<SpectrumFrame>,
+    spectrum_generation: u64,
     pub info_visible: bool,
     pub status: Option<(String, Instant)>,
     pub loading: bool,
@@ -94,6 +95,7 @@ impl App {
             visualizer_rotation: 0.0,
             visualizer_frame: 0,
             spectrum_pending: VecDeque::new(),
+            spectrum_generation: 0,
             info_visible: false,
             status: None,
             loading: false,
@@ -227,7 +229,18 @@ impl App {
     }
 
     pub fn queue_spectrum(&mut self, frame: SpectrumFrame) {
-        self.spectrum_pending.push_back(frame);
+        if frame.generation == self.spectrum_generation {
+            self.spectrum_pending.push_back(frame);
+        }
+    }
+
+    pub fn start_spectrum_stream(&mut self, generation: u64) {
+        self.spectrum_generation = generation;
+        self.spectrum_pending.clear();
+        self.spectrum.fill(0.0);
+        self.spectrum_peaks.fill(0.0);
+        self.spectrum_active = false;
+        self.spectrum_activity = 0.0;
     }
 
     pub fn present_spectrum(&mut self, position: Duration) {
