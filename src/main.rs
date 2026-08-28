@@ -10,14 +10,18 @@ use clap::Parser;
 use cloudruby::{
     app::{Action, App, PlaybackState, action_for_key},
     config::{Config, ConfigSource},
-    library::load_sources,
+    library::load_sources_incremental,
     player::{AudioPlayer, DefaultPlayer, PlayerEvent, PlayerState},
     ui,
 };
 use crossterm::event::{Event, EventStream};
 use futures_util::StreamExt;
-use rand::seq::SliceRandom;
 use tokio::sync::mpsc;
+
+enum LoadEvent {
+    Track(cloudruby::library::MediaItem),
+    Finished(Result<(), String>),
+}
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -77,20 +81,25 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    let sources = config.sources.clone();
-    let mut tracks = tokio::task::spawn_blocking(move || load_sources(&sources)).await??;
-    if tracks.is_empty() {
-        anyhow::bail!("no supported audio entries found");
-    }
-    if !config.no_shuffle {
-        tracks.shuffle(&mut rand::rng());
-    }
-
     let (player_tx, player_rx) = mpsc::unbounded_channel();
     let player: Arc<dyn AudioPlayer> = DefaultPlayer::new(player_tx)?;
-    let mut app = App::new(tracks);
-    play_selected(&player, &mut app)?;
-    run_tui(player, player_rx, app, config).await
+    let (load_tx, load_rx) = mpsc::unbounded_channel();
+    let sources = config.sources.clone();
+    spawn_loader(sources, load_tx.clone());
+
+    let mut app = App::new(Vec::new());
+    app.start_loading();
+    run_tui(player, player_rx, load_rx, load_tx, app, config).await
+}
+
+fn spawn_loader(sources: Vec<String>, load_tx: mpsc::UnboundedSender<LoadEvent>) {
+    tokio::task::spawn_blocking(move || {
+        let result = load_sources_incremental(&sources, |track| {
+            let _ = load_tx.send(LoadEvent::Track(track));
+        })
+        .map_err(|error| error.to_string());
+        let _ = load_tx.send(LoadEvent::Finished(result));
+    });
 }
 
 fn read_stdin_sources() -> anyhow::Result<Vec<String>> {
@@ -124,6 +133,8 @@ fn play_selected(player: &Arc<dyn AudioPlayer>, app: &mut App) -> anyhow::Result
 async fn run_tui(
     player: Arc<dyn AudioPlayer>,
     mut player_events: mpsc::UnboundedReceiver<PlayerEvent>,
+    mut load_events: mpsc::UnboundedReceiver<LoadEvent>,
+    load_tx: mpsc::UnboundedSender<LoadEvent>,
     mut app: App,
     config: Config,
 ) -> anyhow::Result<()> {
@@ -145,6 +156,27 @@ async fn run_tui(
                 event = input.next() => {
                     match event {
                         Some(Ok(Event::Key(key))) => {
+                            if app.source_input.is_some() {
+                                match key.code {
+                                    crossterm::event::KeyCode::Enter => {
+                                        if let Some(source) = app.submit_source() {
+                                            app.start_loading();
+                                            spawn_loader(vec![source], load_tx.clone());
+                                        } else {
+                                            app.cancel_add_source();
+                                        }
+                                    }
+                                    crossterm::event::KeyCode::Esc => app.cancel_add_source(),
+                                    crossterm::event::KeyCode::Backspace => {
+                                        app.remove_source_character()
+                                    }
+                                    crossterm::event::KeyCode::Char(character) => {
+                                        app.append_source_character(character)
+                                    }
+                                    _ => {}
+                                }
+                                continue;
+                            }
                             if let Some(action) = action_for_key(key)
                                 && handle_action(action, &player, &mut app)?
                             {
@@ -159,8 +191,10 @@ async fn run_tui(
                 }
                 event = player_events.recv() => match event {
                     Some(PlayerEvent::EndOfStream) => {
-                        app.next();
-                        play_selected(&player, &mut app)?;
+                        if !app.tracks.is_empty() {
+                            app.next();
+                            play_selected(&player, &mut app)?;
+                        }
                     }
                     Some(PlayerEvent::Error(message)) => app.notify(format!("Playback error: {message}")),
                     Some(PlayerEvent::Buffering(value)) => {
@@ -173,6 +207,26 @@ async fn run_tui(
                         PlayerState::Stopped => PlaybackState::Stopped,
                     },
                     Some(PlayerEvent::Spectrum(frame)) => app.queue_spectrum(frame),
+                    None => {}
+                },
+                event = load_events.recv() => match event {
+                    Some(LoadEvent::Track(track)) => {
+                        let should_start = app.tracks.is_empty();
+                        if app.add_track(track) && should_start {
+                            play_selected(&player, &mut app)?;
+                        }
+                    }
+                    Some(LoadEvent::Finished(result)) => {
+                        if let Err(message) = result {
+                            if app.finish_loading(false) {
+                                app.notify(format!("Loading failed: {message}"));
+                            }
+                        } else if app.finish_loading(!config.no_shuffle)
+                            && app.tracks.is_empty()
+                        {
+                            app.notify("No supported audio entries found");
+                        }
+                    }
                     None => {}
                 },
                 _ = tokio::signal::ctrl_c() => break,
@@ -224,6 +278,14 @@ fn handle_action(
                 app.playback = PlaybackState::Paused;
             }
         }
+        Action::ToggleShuffle => {
+            if app.loading {
+                app.notify("Shuffle is available after loading finishes");
+            } else {
+                app.toggle_shuffle();
+            }
+        }
+        Action::AddSource => app.begin_add_source(),
     }
     Ok(false)
 }

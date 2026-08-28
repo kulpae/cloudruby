@@ -6,6 +6,12 @@ internet-radio and Icecast stations. The interface is written with Ratatui and
 playback uses GStreamer 1.x.
 
 On wide terminals, the right pane shows a live, rotating radial FFT visualization.
+
+## SoundCloud support
+
+SoundCloud support has been dropped because the integration was incompatible
+with SoundCloud's API Terms of Use.
+
 ## Requirements
 
 - Rust 1.92 or newer
@@ -82,6 +88,8 @@ present.
 | `+`, `=` | Raise volume |
 | `-`, `_` | Lower volume |
 | `m`, `M` | Toggle mute |
+| `s`, `S` | Toggle shuffle |
+| `a`, `A` | Add a source while the TUI is open |
 | `v`, `V` | Toggle source information |
 | `q`, `Q`, Esc | Quit |
 

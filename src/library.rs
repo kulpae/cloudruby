@@ -57,22 +57,36 @@ pub enum LibraryError {
 
 pub fn load_sources(sources: &[String]) -> Result<Vec<MediaItem>, LibraryError> {
     let mut items = Vec::new();
-    for source in sources {
-        load_source(source, &mut items)?;
-    }
-    let mut seen = HashSet::new();
-    items.retain(|item| seen.insert(item.uri.clone()));
+    load_sources_incremental(sources, |item| items.push(item))?;
     Ok(items)
 }
 
-fn load_source(source: &str, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
+pub fn load_sources_incremental<F>(sources: &[String], mut add: F) -> Result<(), LibraryError>
+where
+    F: FnMut(MediaItem),
+{
+    let mut seen = HashSet::new();
+    for source in sources {
+        load_source(source, &mut |item| {
+            if seen.insert(item.uri.clone()) {
+                add(item);
+            }
+        })?;
+    }
+    Ok(())
+}
+
+fn load_source<F>(source: &str, add: &mut F) -> Result<(), LibraryError>
+where
+    F: FnMut(MediaItem),
+{
     if let Ok(url) = Url::parse(source) {
         if matches!(url.scheme(), "http" | "https" | "file") {
             if matches!(url.scheme(), "http" | "https") && is_playlist_url(&url) {
-                parse_remote_playlist(url, items)?;
+                parse_remote_playlist(url, add)?;
                 return Ok(());
             }
-            items.push(item_from_url(url, None)?);
+            add(item_from_url(url, None)?);
             return Ok(());
         }
         return Err(LibraryError::Unsupported(source.to_owned()));
@@ -81,11 +95,11 @@ fn load_source(source: &str, items: &mut Vec<MediaItem>) -> Result<(), LibraryEr
     let expanded = expand_home(source);
     let path = expanded.as_path();
     if path.is_dir() {
-        scan_directory(path, items)?;
+        scan_directory(path, add)?;
     } else if is_playlist(path) {
-        parse_playlist(path, items)?;
+        parse_playlist(path, add)?;
     } else if path.is_file() && is_audio(path) {
-        items.push(item_from_path(path, None)?);
+        add(item_from_path(path, None)?);
     } else if !path.exists() {
         return Err(LibraryError::Missing(path.to_owned()));
     } else {
@@ -94,7 +108,10 @@ fn load_source(source: &str, items: &mut Vec<MediaItem>) -> Result<(), LibraryEr
     Ok(())
 }
 
-fn scan_directory(directory: &Path, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
+fn scan_directory<F>(directory: &Path, add: &mut F) -> Result<(), LibraryError>
+where
+    F: FnMut(MediaItem),
+{
     let mut entries = fs::read_dir(directory)
         .map_err(|source| LibraryError::Read {
             path: directory.to_owned(),
@@ -109,21 +126,24 @@ fn scan_directory(directory: &Path, items: &mut Vec<MediaItem>) -> Result<(), Li
     for entry in entries {
         let path = entry.path();
         if path.is_dir() {
-            scan_directory(&path, items)?;
+            scan_directory(&path, add)?;
         } else if is_audio(&path) {
-            items.push(item_from_path(&path, None)?);
+            add(item_from_path(&path, None)?);
         }
     }
     Ok(())
 }
 
-fn parse_playlist(path: &Path, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
+fn parse_playlist<F>(path: &Path, add: &mut F) -> Result<(), LibraryError>
+where
+    F: FnMut(MediaItem),
+{
     let content = fs::read_to_string(path).map_err(|source| LibraryError::Read {
         path: path.to_owned(),
         source,
     })?;
     let base = path.parent().unwrap_or_else(|| Path::new("."));
-    parse_playlist_content(&content, items, |line| {
+    parse_playlist_content(&content, add, |line| {
         let expanded = expand_home(line);
         let entry = expanded.as_path();
         if entry.is_absolute() {
@@ -137,7 +157,10 @@ fn parse_playlist(path: &Path, items: &mut Vec<MediaItem>) -> Result<(), Library
     })
 }
 
-fn parse_remote_playlist(url: Url, items: &mut Vec<MediaItem>) -> Result<(), LibraryError> {
+fn parse_remote_playlist<F>(url: Url, add: &mut F) -> Result<(), LibraryError>
+where
+    F: FnMut(MediaItem),
+{
     let response = reqwest::blocking::get(url.as_str()).map_err(|source| LibraryError::Fetch {
         url: url.to_string(),
         source,
@@ -159,7 +182,7 @@ fn parse_remote_playlist(url: Url, items: &mut Vec<MediaItem>) -> Result<(), Lib
         url: url.to_string(),
         source,
     })?;
-    parse_playlist_content(&content, items, |line| {
+    parse_playlist_content(&content, add, |line| {
         url.join(line)
             .map_err(|source| LibraryError::Unsupported(source.to_string()))
     })
@@ -167,7 +190,7 @@ fn parse_remote_playlist(url: Url, items: &mut Vec<MediaItem>) -> Result<(), Lib
 
 fn parse_playlist_content<F>(
     content: &str,
-    items: &mut Vec<MediaItem>,
+    add: &mut impl FnMut(MediaItem),
     resolve_entry: F,
 ) -> Result<(), LibraryError>
 where
@@ -192,7 +215,7 @@ where
             if !matches!(url.scheme(), "http" | "https" | "file") {
                 return Err(LibraryError::Unsupported(line.to_owned()));
             }
-            items.push(item_from_url(url, next_title.take())?);
+            add(item_from_url(url, next_title.take())?);
         }
     }
     Ok(())
@@ -325,5 +348,18 @@ mod tests {
             "https://radio.example/live".to_owned(),
         ];
         assert_eq!(load_sources(&sources).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn incremental_loading_emits_items_in_source_order() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join("first.mp3"), []).unwrap();
+        fs::write(directory.path().join("second.ogg"), []).unwrap();
+        let mut titles = Vec::new();
+        load_sources_incremental(&[directory.path().display().to_string()], |item| {
+            titles.push(item.title);
+        })
+        .unwrap();
+        assert_eq!(titles, ["first", "second"]);
     }
 }

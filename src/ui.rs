@@ -47,6 +47,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
 
     if inner.height < 8 || inner.width < 32 {
         render_compact(frame, app, inner, config);
+        render_source_input(frame, app, area, config);
         return;
     }
 
@@ -77,6 +78,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, config: &UiConfig) {
         let width = if area.width >= 100 { 58 } else { 82 };
         render_details(frame, app, centered_rect(width, 68, area), config, true);
     }
+    render_source_input(frame, app, area, config);
 }
 
 fn render_compact(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
@@ -94,6 +96,21 @@ fn render_compact(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfi
         ])
         .wrap(Wrap { trim: true }),
         area,
+    );
+}
+
+fn render_source_input(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
+    let Some(input) = &app.source_input else {
+        return;
+    };
+    let popup = centered_rect(78, 20, area);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(format!(" {input}"))
+            .block(panel(config, " Add source · Enter add · Esc cancel "))
+            .style(themed(config, "input", Style::new().fg(Color::White)))
+            .wrap(Wrap { trim: false }),
+        popup,
     );
 }
 
@@ -819,10 +836,16 @@ fn detail_line(config: &UiConfig, label: &str, value: &str) -> Line<'static> {
 }
 
 fn render_status(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) {
-    let (symbol, message) = app.status.as_ref().map_or_else(
-        || ("●", playback_name(app.playback)),
-        |(message, _)| ("◆", message.as_str()),
-    );
+    let loading_message;
+    let (symbol, message) = if app.loading {
+        loading_message = format!("Loading sources… {} tracks queued", app.loaded_count);
+        ("…", loading_message.as_str())
+    } else {
+        app.status.as_ref().map_or_else(
+            || ("●", playback_name(app.playback)),
+            |(message, _)| ("◆", message.as_str()),
+        )
+    };
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -841,7 +864,9 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, config: &UiConfig) {
         ("space", "pause"),
         ("+/-", "volume"),
         ("m", "mute"),
+        ("s", "shuffle"),
         ("v", "info"),
+        ("a", "add source"),
         ("q", "quit"),
     ];
     let mut spans = vec![Span::raw(" ")];
@@ -854,7 +879,14 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, config: &UiConfig) {
         }
         spans.push(Span::styled(
             format!(" {key} "),
-            themed(config, "key", Style::new().black().on_gray().bold()),
+            themed(
+                config,
+                "key",
+                Style::new()
+                    .fg(Color::Cyan)
+                    .bg(Color::Rgb(20, 35, 55))
+                    .bold(),
+            ),
         ));
         spans.push(Span::styled(
             format!(" {action}"),

@@ -4,6 +4,7 @@ use std::{
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use rand::seq::SliceRandom;
 
 use crate::{library::MediaItem, player::SpectrumFrame};
 
@@ -17,6 +18,8 @@ pub enum Action {
     ToggleMute,
     ToggleInfo,
     TogglePause,
+    ToggleShuffle,
+    AddSource,
 }
 
 pub fn action_for_key(key: KeyEvent) -> Option<Action> {
@@ -32,6 +35,8 @@ pub fn action_for_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('m' | 'M') => Some(Action::ToggleMute),
         KeyCode::Char('v' | 'V') => Some(Action::ToggleInfo),
         KeyCode::Char(' ') => Some(Action::TogglePause),
+        KeyCode::Char('s' | 'S') => Some(Action::ToggleShuffle),
+        KeyCode::Char('a' | 'A') => Some(Action::AddSource),
         _ => None,
     }
 }
@@ -63,10 +68,16 @@ pub struct App {
     spectrum_pending: VecDeque<SpectrumFrame>,
     pub info_visible: bool,
     pub status: Option<(String, Instant)>,
+    pub loading: bool,
+    pub loaded_count: usize,
+    pub shuffle_enabled: bool,
+    pub source_input: Option<String>,
+    pending_loads: usize,
 }
 
 impl App {
     pub fn new(tracks: Vec<MediaItem>) -> Self {
+        let loaded_count = tracks.len();
         Self {
             tracks,
             selected: 0,
@@ -85,6 +96,89 @@ impl App {
             spectrum_pending: VecDeque::new(),
             info_visible: false,
             status: None,
+            loading: false,
+            loaded_count,
+            shuffle_enabled: false,
+            source_input: None,
+            pending_loads: 0,
+        }
+    }
+
+    pub fn start_loading(&mut self) {
+        if !self.loading {
+            self.loaded_count = self.tracks.len();
+        }
+        self.loading = true;
+        self.pending_loads += 1;
+        self.notify("Loading sources…");
+    }
+
+    pub fn add_track(&mut self, track: MediaItem) -> bool {
+        if self.tracks.iter().any(|item| item.uri == track.uri) {
+            return false;
+        }
+        self.tracks.push(track);
+        self.loaded_count = self.tracks.len();
+        true
+    }
+
+    pub fn finish_loading(&mut self, shuffle: bool) -> bool {
+        self.pending_loads = self.pending_loads.saturating_sub(1);
+        if self.pending_loads != 0 {
+            return false;
+        }
+        self.loading = false;
+        self.shuffle_enabled = shuffle;
+        if shuffle {
+            self.shuffle_remaining();
+            self.notify(format!("Loaded {} tracks · shuffle on", self.tracks.len()));
+        } else {
+            self.notify(format!("Loaded {} tracks", self.tracks.len()));
+        }
+        true
+    }
+
+    pub fn begin_add_source(&mut self) {
+        self.source_input = Some(String::new());
+    }
+
+    pub fn cancel_add_source(&mut self) {
+        self.source_input = None;
+    }
+
+    pub fn append_source_character(&mut self, character: char) {
+        if let Some(input) = &mut self.source_input {
+            input.push(character);
+        }
+    }
+
+    pub fn remove_source_character(&mut self) {
+        if let Some(input) = &mut self.source_input {
+            input.pop();
+        }
+    }
+
+    pub fn submit_source(&mut self) -> Option<String> {
+        self.source_input
+            .take()
+            .filter(|source| !source.trim().is_empty())
+    }
+
+    pub fn toggle_shuffle(&mut self) {
+        self.shuffle_enabled = !self.shuffle_enabled;
+        if self.shuffle_enabled {
+            self.shuffle_remaining();
+        }
+        self.notify(if self.shuffle_enabled {
+            "Shuffle on"
+        } else {
+            "Shuffle off"
+        });
+    }
+
+    fn shuffle_remaining(&mut self) {
+        if self.tracks.len() > self.selected + 1 {
+            self.tracks[(self.selected + 1)..].shuffle(&mut rand::rng());
         }
     }
 
@@ -228,6 +322,10 @@ mod tests {
         assert_eq!(
             action_for_key(key(KeyCode::Char(' '))),
             Some(Action::TogglePause)
+        );
+        assert_eq!(
+            action_for_key(key(KeyCode::Char('s'))),
+            Some(Action::ToggleShuffle)
         );
     }
 
