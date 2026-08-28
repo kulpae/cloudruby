@@ -62,7 +62,7 @@ directories = "6"
 futures-util = "0.3"
 gstreamer = { version = "0.25", optional = true }
 rand = "0.9"
-ratatui = "0.29"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
