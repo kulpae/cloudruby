@@ -62,7 +62,7 @@ on terminal support.
 
 ## Style keys
 
-Available keys are `app`, `border`, `logo`, `header`, `playback`, `title`,
+Available keys are `app`, `dialog`, `border`, `logo`, `header`, `playback`, `title`,
 `volume`, `tabs`, `tabs_active`, `panel_title`, `progress_track`, `progress_fill`,
 `playlist`, `playlist_active`, `playlist_index`, `media_icon`, `scrollbar_track`,
 `scrollbar_thumb`, `visualizer_low`, `visualizer_mid`, `visualizer_high`,

@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use directories::ProjectDirs;
+use directories::{BaseDirs, ProjectDirs};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -28,7 +28,13 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            colors: HashMap::new(),
+            colors: HashMap::from([(
+                "dialog".into(),
+                StyleConfig::Detailed(StyleSpec {
+                    bg: Some("#0d1b2a".into()),
+                    ..StyleSpec::default()
+                }),
+            )]),
             border_type: "rounded".into(),
             unicode: true,
             visualizer_sensitivity: 1.25,
@@ -84,7 +90,7 @@ impl Config {
 
     pub fn path() -> Result<PathBuf, ConfigError> {
         ProjectDirs::from("net", "cloudruby", "cloudruby")
-            .map(|dirs| dirs.config_dir().join("config.toml"))
+            .map(|dirs| config_dir(&dirs).join("config.toml"))
             .ok_or(ConfigError::MissingConfigDirectory)
     }
 
@@ -115,6 +121,17 @@ impl Config {
             message: error.to_string(),
         })
     }
+}
+
+fn config_dir(dirs: &ProjectDirs) -> PathBuf {
+    #[cfg(unix)]
+    if std::env::var_os("XDG_CONFIG_HOME").is_none() {
+        if let Some(base_dirs) = BaseDirs::new() {
+            return base_dirs.home_dir().join(".config").join("cloudruby");
+        }
+    }
+
+    dirs.config_dir().to_path_buf()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

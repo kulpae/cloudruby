@@ -1,0 +1,52 @@
+[ui]
+border_type = "rounded"
+unicode = true
+visualizer_sensitivity = 1.25
+
+[ui.colors]
+app = { fg = "#d7f9f1", bg = "#101a24" }
+dialog = { bg = "#160f0c" }
+border = { fg = "#4f7880" }
+logo = { fg = "#5eead4", modifiers = ["bold"] }
+
+header = { fg = "#a7f3d0", modifiers = ["bold"] }
+title = { fg = "#facc15", modifiers = ["bold"] }
+playback = { fg = "#67e8f9", modifiers = ["bold"] }
+volume = { fg = "#86efac" }
+
+tabs = { fg = "#8da6ad" }
+tabs_active = { fg = "#5eead4", modifiers = ["bold", "underlined"] }
+panel_title = { fg = "#93c5fd", modifiers = ["bold"] }
+
+progress_track = { fg = "#334155", bg = "#17212b" }
+progress_fill = { fg = "#34d399", bg = "#1e3a3a", modifiers = ["bold"] }
+
+playlist = { fg = "#cbd5e1" }
+playlist_active = { fg = "#082f49", bg = "#67e8f9", modifiers = ["bold"] }
+playlist_index = { fg = "#64748b" }
+
+media_icon = { fg = "#c084fc" }
+scrollbar_track = { fg = "#263746" }
+scrollbar_thumb = { fg = "#2dd4bf" }
+
+detail_label = { fg = "#a5b4fc", modifiers = ["bold"] }
+detail_value = { fg = "#e2e8f0" }
+
+status_icon = { fg = "#fbbf24", modifiers = ["bold"] }
+status = { fg = "#a7f3d0" }
+separator = { fg = "#45636b" }
+
+key = { fg = "#d7f9f1", modifiers = ["bold"] }
+hint = { fg = "#fda4af" }
+footer = { fg = "#78909c" }
+
+visualizer_low = { fg = "#0284c7" }
+visualizer_mid = { fg = "#0894aa" }
+visualizer_high = { fg = "#0d9488" }
+visualizer_peak = { fg = "#77f9ee", modifiers = ["bold"] }
+visualizer_hot = { fg = "#f43f5e", modifiers = ["bold"] }
+
+visualizer_idle = { fg = "#ddd1d5" }
+visualizer_background = { bg = "#07131b" }
+visualizer_stars = { fg = "#34b5dd", modifiers = ["dim"] }
+visualizer_star_trail = { fg = "#164e63", modifiers = ["dim"] }

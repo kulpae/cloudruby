@@ -192,9 +192,9 @@ Command-line sources replace configured sources for that run. See
 
 ## Screenshots
 
-
-
-![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Figure 1")
+![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Terminal: Konsole, Font: Hack 14pt")
+![Terminal: Konsole, Font: Cascadia Code NF 14pt](doc/screenshot_2.png?raw=true "Theme: green_slate, Konsole, Font: Cascadia Code NF 14pt")
+![Terminal: Konsole, Font: Cascadia Code NF 14pt](doc/screenshot_3.png?raw=true "Theme: red_desert, Font: Cascadia Code NF 14pt")
 
 ## Development
 

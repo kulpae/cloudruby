@@ -267,7 +267,8 @@ fn render_search_input(frame: &mut Frame<'_>, app: &mut App, area: Rect, config:
             ))
             .borders(Borders::ALL)
             .border_type(border_type(config))
-            .border_style(themed(config, "border", Style::new().cyan())),
+            .border_style(themed(config, "border", Style::new().cyan()))
+            .style(themed(config, "dialog", Style::default())),
         dialog,
     );
     frame.render_widget(
@@ -324,11 +325,11 @@ fn render_help(frame: &mut Frame<'_>, app: &App, area: Rect, config: &UiConfig) 
     let mut lines = bindings
         .iter()
         .map(|(key, action)| {
+            let key_label = format!(" {key} ");
+            let key_padding = " ".repeat(31usize.saturating_sub(key_label.len()));
             Line::from(vec![
-                Span::styled(
-                    format!(" {key:<30}"),
-                    themed(config, "key", Style::new().cyan().bold()),
-                ),
+                Span::styled(key_label, themed(config, "key", Style::new().cyan().bold())),
+                Span::raw(key_padding),
                 Span::styled(*action, themed(config, "footer", Style::new().white())),
             ])
         })
@@ -1147,6 +1148,7 @@ fn panel<'a>(config: &UiConfig, title: &'a str) -> Block<'a> {
         .borders(Borders::ALL)
         .border_type(border_type(config))
         .border_style(themed(config, "border", Style::new().dark_gray()))
+        .style(themed(config, "dialog", Style::default()))
         .padding(Padding::horizontal(1))
 }
 
