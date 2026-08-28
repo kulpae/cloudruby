@@ -43,10 +43,66 @@ sudo pacman -S base-devel pkgconf gstreamer gst-plugins-base \
 
 ## Build and run
 
+The commands below build CloudRuby from source on Linux. You do not need to
+install Rust or Cargo separately: `rustup` installs Rust and includes Cargo,
+the Rust build tool. The repository selects the stable toolchain
+automatically.
+
+### 1. Install Rust and Cargo
+
+Install `rustup` using the official installer:
+
 ```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Choose the default installation when prompted. Then load Cargo into the
+current terminal session (or close and reopen the terminal):
+
+```sh
+source "$HOME/.cargo/env"
+```
+
+Check that both tools are available:
+
+```sh
+rustc --version
+cargo --version
+```
+
+### 2. Install system dependencies
+
+Install the GStreamer development files and plugins for your Linux
+distribution using one of the commands in [Requirements](#requirements)
+if not already installed.
+
+### 3. Download and build CloudRuby
+
+Clone the repository, enter its directory, and compile the optimized release
+build:
+
+```sh
+git clone https://github.com/kulpae/cloudruby.git
+cd cloudruby
 cargo build --release
+```
+
+The executable is created at `target/release/cloudruby`. You can run it
+directly, for example:
+
+```sh
+./target/release/cloudruby ~/Music
+```
+
+To install the executable into Cargo's user-level binary directory
+(`~/.cargo/bin`), run:
+
+```sh
 cargo install --path .
 ```
+
+If `~/.cargo/bin` is on your `PATH`, you can then start CloudRuby from any
+directory:
 
 Play every supported audio file below a folder:
 
