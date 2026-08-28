@@ -128,7 +128,7 @@ Command-line sources replace configured sources for that run. See
 
 
 
-![Terminal: Konsole, Font: Hack 14pt](doc/anim_1.gif?raw=true "Figure 1")
+![Terminal: Konsole, Font: Hack 14pt](doc/anim_1.webp?raw=true "Figure 1")
 
 ![Terminal: Konsole, Font: Hack 14pt](doc/screenshot_1.png?raw=true "Figure 2")
 
